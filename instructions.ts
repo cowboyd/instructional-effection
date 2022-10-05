@@ -1,4 +1,4 @@
-import type { Continuation, Operation, Provide, Task } from "./types.ts";
+import type { Continuation, Operation, Provide } from "./types.ts";
 
 export function* suspend(): Operation<void> {
   return yield { type: "suspend" };

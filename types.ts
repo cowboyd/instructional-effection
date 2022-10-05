@@ -3,7 +3,7 @@ export interface Operation<T> {
   [Symbol.iterator](): Iterator<Instruction<any>, T, any>;
 }
 
-export interface Continuation<T = any, R = any> {
+export interface Continuation<T = any, R = void> {
   (value: T): R;
 }
 
