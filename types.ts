@@ -15,9 +15,9 @@ export type Instruction<T = any> = {
 } | {
   type: "action";
   operation(
-    resolve: Continuation<T>,
-    reject: Continuation<Error>,
-  ): Operation<T>;
+    resolve: Continuation<T, void>,
+    reject: Continuation<Error, void>,
+  ): Operation<void>;
 } | {
   type: "suspend";
 };
