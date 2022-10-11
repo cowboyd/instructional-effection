@@ -1,20 +1,20 @@
-import type { Continuation, Operation, Provide } from "./types.ts";
+import type { Operation, Provide, Reject, Resolve } from "./types.ts";
 
-export function* suspend(): Operation<void> {
-  return yield { type: "suspend" };
+export function suspend(): Operation<void> {
+  return [{ type: "suspend" }];
 }
 
-export function* resource<T>(
+export function resource<T>(
   operation: (provide: Provide<T>) => Operation<void>,
 ): Operation<T> {
-  return yield { type: "resource", operation };
+  return [{ type: "resource", operation }];
 }
 
-export function* action<T>(
+export function action<T>(
   operation: (
-    resolve: Continuation<T>,
-    reject: Continuation<Error>,
+    resolve: Resolve<T>,
+    reject: Reject,
   ) => Operation<void>,
 ): Operation<T> {
-  return yield { type: "action", operation };
+  return [{ type: "action", operation }];
 }

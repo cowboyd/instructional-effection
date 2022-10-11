@@ -3,9 +3,9 @@ export interface Operation<T> {
   [Symbol.iterator](): Iterator<Instruction<any>, T, any>;
 }
 
-export interface Continuation<T = any, R = void> {
-  (value: T): R;
-}
+export type Resolve<T = unknown> = (value: T) => void;
+
+export type Reject = (error: Error) => void;
 
 export type Provide<T> = (value: T) => Operation<void>;
 
@@ -14,10 +14,7 @@ export type Instruction<T = any> = {
   operation(provide: Provide<T>): Operation<T>;
 } | {
   type: "action";
-  operation(
-    resolve: Continuation<T, void>,
-    reject: Continuation<Error, void>,
-  ): Operation<void>;
+  operation(resolve: Resolve<T>, reject: Reject): Operation<void>;
 } | {
   type: "suspend";
 };

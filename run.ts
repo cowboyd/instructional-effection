@@ -1,6 +1,6 @@
-import type { Instruction, Operation, Task } from "./types.ts";
+import type { Instruction, Operation, Reject, Resolve, Task } from "./types.ts";
 import { Computation, evaluate, reset, shift } from "./deps.ts";
-import { Reject, Resolve, Result } from "./result.ts";
+import { Result } from "./result.ts";
 import { createFuture } from "./future.ts";
 import { lazy } from "./lazy.ts";
 
