@@ -1,4 +1,4 @@
-import { Computation, Continuation, evaluate, shift } from "./deps.ts";
+import { Computation, Continuation, shift } from "./deps.ts";
 
 export interface Reducer<Cx, T> {
   (context: Cx, next: Next<Cx, T>): Computation<void>;
