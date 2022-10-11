@@ -1,13 +1,21 @@
 import type { Future } from "./types.ts";
-import type { Result } from "./result.ts";
 import { action, suspend } from "./instructions.ts";
 import { lazy } from "./lazy.ts";
+
+export type Result<T = unknown> = {
+  type: "resolved";
+  value: T;
+} | {
+  type: "rejected";
+  error: Error;
+};
 
 export interface NewFuture<T> {
   resolve(value: T): void;
   reject(error: Error): void;
   future: Future<T>;
 }
+
 export function createFuture<T>(): NewFuture<T> {
   let result: Result<T> | null = null;
 

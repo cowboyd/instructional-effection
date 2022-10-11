@@ -1,7 +1,6 @@
 import type { Instruction, Operation, Reject, Resolve, Task } from "./types.ts";
 import { Computation, evaluate, reset, shift } from "./deps.ts";
-import { Result } from "./result.ts";
-import { createFuture } from "./future.ts";
+import { createFuture, Result } from "./future.ts";
 import { lazy } from "./lazy.ts";
 
 export function run<T>(block: () => Operation<T>): Task<T> {
