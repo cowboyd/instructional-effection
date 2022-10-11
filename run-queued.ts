@@ -1,142 +1,251 @@
-import type { Instruction, Operation, Task } from './types.ts';
-import { Computation, evaluate, reset, shift } from './deps.ts';
-import { Outcome, Result, Resolve, Reject, forward } from './result.ts';
-import { createFuture } from './future.ts';
+import type { Instruction, Operation, Task } from "./types.ts";
+import { Computation, evaluate, reset, shift } from "./deps.ts";
+import { Reject, Resolve, Result } from "./result.ts";
+import { createFuture } from "./future.ts";
+import { lazy } from "./lazy.ts";
 
 export function run<T>(block: () => Operation<T>): Task<T> {
   let { future, resolve, reject } = createFuture<T>();
 
   let frame: Frame<T>;
-  evaluate(function*() {
+  evaluate(function* () {
     frame = yield* createFrame<T>();
   });
 
-  evaluate(function*() {
-    let result = yield* frame.enter(block);
-    if (result.type === 'terminated') {
-      reject(new Error('halted'));
+  evaluate(function* () {
+    let final = yield* frame.enter(block);
+    if (final.destruction.type === "rejected") {
+      reject(final.destruction.error);
+    } else if (final.exit.type === "termination") {
+      reject(new Error("halted"));
+    } else if (final.exit.type === "failure") {
+      reject(final.exit.error);
     } else {
-      forward(result, resolve, reject);
+      let { result } = final.exit;
+      if (result.type === "rejected") {
+        reject(result.error);
+      } else {
+        resolve(result.value);
+      }
     }
-  })
+  });
 
   return {
     ...future,
     halt() {
       let { future, resolve, reject } = createFuture<void>();
-      evaluate(function*() {
-        let result = yield* frame.terminate();
-        forward(result, resolve, reject);
-      })
-
+      evaluate(function* () {
+        let result = yield* frame.destroy();
+        if (result.type === "resolved") {
+          resolve(result.value);
+        } else {
+          reject(result.error);
+        }
+      });
       return future;
-    }
+    },
   };
 }
 
-interface Frame<T = unknown> extends Computation<Outcome<T>> {
-  enter(block: () => Operation<T>): Computation<Outcome<T>>;
-  terminate(): Computation<Result<void>>;
+interface Frame<T = unknown> extends Computation<Final<T>> {
+  enter(block: () => Operation<T>): Computation<Final<T>>;
+  destroy(): Computation<Result<void>>;
 }
 
 function createFrame<T>(): Computation<Frame<T>> {
-  let outcome: Outcome<T> | undefined;
-  return reset<Frame<T>>(function*() {
-    let listeners: Array<(outcome: Outcome<T>) => void> = [];
-    let [frame, block] = yield* shift<[Frame, () => Operation<any>]>(function*(k) {
-      let self: Frame<T> =  {
+  let final: Final<T> | undefined;
+  let controller = new AbortController();
+
+  return reset<Frame<T>>(function* () {
+    let listeners: Array<(outcome: Final<T>) => void> = [];
+    let [, block] = yield* shift<[Frame, () => Operation<T>]>(function* (k) {
+      let self: Frame<T> = {
         *enter(block: () => Operation<T>) {
           k([self, block]);
           return yield* self;
         },
-        *terminate() { return { type: 'resolved', value: void 0 } },
+        *destroy() {
+          controller.abort();
+          let { destruction: result } = yield* self;
+          return result;
+        },
         *[Symbol.iterator]() {
-          if (outcome) {
-            return outcome;
+          if (final) {
+            return final;
           } else {
-            return yield* shift<Outcome<T>>(function*(k) {
+            return yield* shift<Final<T>>(function* (k) {
               listeners.push(k);
             });
           }
-        }
+        },
       };
       return self;
     });
 
-    // when exitState is defined, we now know if we exited because of
-    //1. termination
-    //2. result
-    let exitState: Exit<T> | undefined = void 0;
-    exitState = yield* shift<Exit<T>>(function*(exit) {
-      let iterator = block()[Symbol.iterator]();
-      let getNext = $next<T>(void 0);
-      let state: State = 'running';
-      while (typeof exitState === 'undefined') {
-        let next = getNext(iterator);
-        if (next.done) {
-          exit({ type: 'resolved', value: next.value });
-        } else {
-          let instruction = next.value;
-          if (instruction.type === 'suspend') {
-            state = 'suspended';
-            yield* shift<never>(function*() {});
-          } else if (instruction.type === 'action') {
-            let { operation } = instruction;
-            let result = yield* shift<Result>(function*(k) {
-              let yieldingTo = yield* createFrame();
-              let $return = (result: Result) => {
-                evaluate(function*() {
-                  let termination = yield* yieldingTo.terminate();
-                  if (termination.type === 'resolved') {
-                    k(result);
-                  } else {
-                    k(termination);
-                  }
-                })
-              }
-              let resolve: Resolve = (value) => $return({ type: 'resolved', value });
-              let reject: Reject = (error) => $return({ type: 'rejected', error });
+    let iterator = lazy(() => block()[Symbol.iterator]());
 
-              let done = yield* yieldingTo.enter(() => operation(resolve, reject));
-              if (done.type === 'resolved' && typeof result !== 'undefined') {
-                k({ type: 'rejected', error: new Error('reached the end of an action, but resolve() or reject() were never called')});
-              }
-            });
-          }
-        }
+    let exitState = yield* reduce<T>({
+      iterator,
+      start: $next(undefined),
+      signal: controller.signal,
+    });
+
+    // exit state has now been determined, so time to begin
+    // shutdown process.
+
+    // First cleanup anything that we might have been yielding to. This
+    // will happen when exitState is a termination or a resource failure.
+
+    let cleanup = yield* shift<Result<void>>(function* (k) {
+      if (exitState.type !== "result" && exitState.state.type === "yielding") {
+        k(yield* exitState.state.to.destroy());
+      } else {
+        k({ type: "resolved" } as Result<void>);
       }
     });
 
-    // we are now halting everything
-    // 1. kill anything that we're yielding to
-    // 2. abort and drain the iterator
-    // 3. destroy all resources
-    let destruction = yield* shift<Result<void>>(function*(k) {
-      k({ type: 'resolved', value: void 0 });
+    // Now we run the iterator to completion, no matter what.
+    // This cannot be aborted. We may want to warn if we see
+    // a suspend instruction in this reduction.
+    let exhaustion = yield* reduce<void>({
+      iterator: iterator as () => Iterator<Instruction, void>,
+      start: $abort(),
+    });
+
+    // The last bit of cleanup is to terminate all resources since they
+    // may have been needed by the scope of the iterator.
+    // TODO:
+    let deallocation = yield* shift<Result<void>>(function* (k) {
+      k({ type: "resolved" } as Result<void>);
+    });
+
+    let destruction = yield* shift<Result<void>>(function* (k) {
+      if (deallocation.type === "rejected") {
+        k(deallocation);
+      } else if (exhaustion.type === "result") {
+        k(exhaustion.result);
+      } else if (exhaustion.type === "failure") {
+        k({ type: "rejected", error: exhaustion.error });
+      } else if (cleanup.type === "rejected") {
+        k(cleanup);
+      } else {
+        k({ type: "resolved" } as Result<void>);
+      }
     });
 
     //determine final Outcome, and then notify that we're done
-    outcome = { type: 'terminated', result: { type: 'resolved', value: void 0 }};
+    final = { exit: exitState, destruction };
 
     for (let listener of listeners) {
-      listener(outcome);
+      listener(final);
     }
   });
 }
 
-type State = 'running' | 'suspended' | {
-  yieldingTo: Frame;
+interface ReduceOptions<T> {
+  iterator(): Iterator<Instruction, T>;
+  start: (i: Iterator<Instruction, T>) => IteratorResult<Instruction, T>;
+  signal?: AbortSignal;
 }
 
-type Exit<T> = Result<T> | {
-    type: 'escape';
-    state: State;
-    reason: 'termination' | 'failure';
-  }
+function reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
+  let { iterator } = options;
+  return shift<Exit<T>>(function* (exit) {
+    let state: State = { type: "running" };
+    let getNext = options.start;
+
+    if (options.signal) {
+      options.signal.addEventListener(
+        "abort",
+        () => exit({ type: "termination", state }),
+      );
+    }
+
+    while (options.signal ? !options.signal.aborted : true) {
+      state = { type: "running" };
+      let next = getNext(iterator());
+      if (next.done) {
+        exit({
+          type: "result",
+          result: { type: "resolved", value: next.value },
+        });
+        break;
+      } else {
+        let instruction = next.value;
+        if (instruction.type === "suspend") {
+          state = { type: "suspended" };
+          yield* shift<never>(function* () {});
+        } else if (instruction.type === "action") {
+          let { operation } = instruction;
+          let result = yield* shift<Result>(function* (k) {
+            let yieldingTo = yield* createFrame();
+            let $return = (result: Result) => {
+              evaluate(function* () {
+                let termination = yield* yieldingTo.destroy();
+                if (termination.type === "resolved") {
+                  k(result);
+                } else {
+                  k(termination);
+                }
+              });
+            };
+            let resolve: Resolve = (value) =>
+              $return({ type: "resolved", value });
+            let reject: Reject = (error) =>
+              $return({ type: "rejected", error });
+
+            state = { type: "yielding", to: yieldingTo };
+
+            let final = yield* yieldingTo.enter(() =>
+              operation(resolve, reject)
+            );
+
+            if (
+              final.exit.type === "result" &&
+              final.exit.result.type === "resolved"
+            ) {
+              k({
+                type: "rejected",
+                error: new Error(
+                  "reached the end of an action, but resolve() or reject() were never called",
+                ),
+              });
+            }
+          });
+          getNext = result.type === "resolved"
+            ? $next(result.value)
+            : $throw(result.error);
+        }
+      }
+    }
+  });
+}
+
+type State =
+  | { type: "running" }
+  | { type: "suspended" }
+  | { type: "yielding"; to: Frame };
+
+type Exit<T> = {
+  type: "result";
+  result: Result<T>;
+} | {
+  type: "termination";
+  state: State;
+} | {
+  type: "failure";
+  state: State;
+  error: Error;
+};
+
+type Final<T> = {
+  exit: Exit<T>;
+  destruction: Result<void>;
+};
 
 const $next = <T>(value: any) => (i: Iterator<Instruction, T>) => i.next(value);
 
-const $throw = <T>(error: Error)  => (i: Iterator<Instruction, T>) => {
+const $throw = <T>(error: Error) => (i: Iterator<Instruction, T>) => {
   if (i.throw) {
     return i.throw(error);
   } else {
@@ -152,11 +261,10 @@ const $abort = <T>(value?: unknown) => (i: Iterator<Instruction, T>) => {
   }
 };
 
-
 import { action, suspend } from "./mod.ts";
 
 run(function* () {
-  yield* action<void>(function*(resolve) {
+  yield* action<void>(function* (resolve) {
     let timeoutId = setTimeout(resolve, 2000);
     try {
       console.log("yawnn. time for a nap");

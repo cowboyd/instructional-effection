@@ -2,9 +2,9 @@
 
 Effection based on the idea that there are three primitive "instructions"
 
-* resource
-* action
-* suspend
+- resource
+- action
+- suspend
 
 This allows us to express all operations as a composition of these three
 primitives, which means that all operation results are consumed using `yield*`
