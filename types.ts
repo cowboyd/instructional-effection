@@ -17,6 +17,7 @@ export type Instruction<T = any> = {
   operation(resolve: Resolve<T>, reject: Reject): Operation<void>;
 } | {
   type: "suspend";
+  then?(): void;
 };
 
 export interface Future<T> extends Promise<T>, Operation<T> {}
