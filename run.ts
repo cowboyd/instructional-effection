@@ -186,16 +186,8 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
 
   try {
     return yield* shift<Exit<T>>(function* (exit) {
-      let state: State = {
-        type: "running",
-        current: {
-          type: "resolved",
-          value: void 0,
-        },
-      };
-
       if (signal) {
-        let listener = () => exit({ type: "termination", state });
+        let listener = () => exit({ type: "termination", state: frame.state });
         signal.addEventListener("abort", listener, {
           once: true,
         });
@@ -215,14 +207,14 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
           let instruction = next.value;
           if (instruction.type === "suspend") {
             let { then } = instruction;
-            state = { type: "suspended" };
+            frame.state = { type: "suspended" };
             yield* shift<never>(function* () {
               then && then();
             });
           } else if (instruction.type === "action") {
             let { operation } = instruction;
             let yieldingTo = yield* createFrame(frame);
-            state = { type: "yielding", to: yieldingTo.frame };
+            frame.state = { type: "yielding", to: yieldingTo.frame };
             let result = yield* shift<Result>(function* instruction(k) {
               let $return = (result: Result) => {
                 evaluate(function* () {
@@ -255,14 +247,14 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
                 });
               }
             });
-            state = { type: "running", current: result };
+            frame.state = { type: "running", current: result };
             getNext = result.type === "resolved"
               ? $next(result.value)
               : $throw(result.error);
           } else if (instruction.type === "resource") {
             let { operation } = instruction;
             let resource = yield* createFrame(frame);
-            state = { type: "yielding", to: resource.frame };
+            frame.state = { type: "yielding", to: resource.frame };
             let result = yield* shift<Result>(function* (k) {
               let provisioned = false;
 
@@ -280,6 +272,7 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
                 );
                 if (outcome.type === "rejected") {
                   if (provisioned) {
+                    let { state } = frame;
                     exit({ type: "failure", state, error: outcome.error });
                   } else {
                     k(outcome);
@@ -287,12 +280,13 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
                 }
               });
             });
-            state = { type: "running", current: result };
+            frame.state = { type: "running", current: result };
             resources.add(resource.frame);
             getNext = result.type === "resolved"
               ? $next(result.value)
               : $throw(result.error);
           } else if (instruction.type === 'getframe') {
+            frame.state = { type: "running", current: { type: 'resolved', value: frame } };
             getNext = $next(frame);
           }
         }
