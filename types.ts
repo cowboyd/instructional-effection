@@ -18,10 +18,28 @@ export type Instruction<T = any> = {
 } | {
   type: "suspend";
   then?(): void;
+} | {
+  type: "getframe";
 };
 
 export interface Future<T> extends Promise<T>, Operation<T> {}
 
 export interface Task<T> extends Future<T> {
   halt(): Future<void>;
+}
+
+export interface Subscription<T,R> {
+  next(): Operation<IteratorResult<T,R>>;
+}
+
+export type Stream<T,TReturn> = Operation<Subscription<T,TReturn>>;
+
+export interface Port<T,R> {
+  send(message: T): Operation<void>;
+  close(value: R): Operation<void>;
+}
+
+export interface Channel<T,R> {
+  input: Port<T,R>;
+  output: Stream<T,R>;
 }

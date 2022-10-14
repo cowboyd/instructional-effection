@@ -49,7 +49,7 @@ function createFrame<T>(): Computation<Frame<T>> {
   let { signal } = controller;
   return reset<Frame<T>>(function* () {
     let listeners: Array<(outcome: Final<T>) => void> = [];
-    let [, block] = yield* shift<[Frame, () => Operation<T>]>(function* (k) {
+    let [frame, block] = yield* shift<[Frame, () => Operation<T>]>(function* (k) {
       let self: Frame<T> = {
         *enter(block: () => Operation<T>) {
           k([self, block]);
@@ -76,6 +76,7 @@ function createFrame<T>(): Computation<Frame<T>> {
     let iterator = lazy(() => block()[Symbol.iterator]());
 
     let exitState = yield* reduce<T>({
+      frame,
       iterator,
       start: $next(undefined),
       resources,
@@ -98,6 +99,7 @@ function createFrame<T>(): Computation<Frame<T>> {
     // This cannot be aborted. We may want to warn if we see
     // a suspend instruction in this reduction.
     let exhaustion = yield* reduce<void>({
+      frame,
       iterator: iterator as () => Iterator<Instruction, void>,
       start: $abort(),
       resources,
@@ -152,6 +154,7 @@ function createFrame<T>(): Computation<Frame<T>> {
 }
 
 interface ReduceOptions<T> {
+  frame: Frame;
   iterator(): Iterator<Instruction, T>;
   resources: Set<Frame>;
   start: (i: Iterator<Instruction, T>) => IteratorResult<Instruction, T>;
@@ -159,7 +162,7 @@ interface ReduceOptions<T> {
 }
 
 function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
-  let { iterator, resources, signal } = options;
+  let { iterator, frame, resources, signal } = options;
 
   try {
     return yield* shift<Exit<T>>(function* (exit) {
@@ -269,6 +272,8 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
             getNext = result.type === "resolved"
               ? $next(result.value)
               : $throw(result.error);
+          } else if (instruction.type === 'getframe') {
+            getNext = $next(frame);
           }
         }
       }
