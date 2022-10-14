@@ -4,15 +4,22 @@ import { createFuture, Result } from "./future.ts";
 import { lazy } from "./lazy.ts";
 
 export function run<T>(block: () => Operation<T>): Task<T> {
-  let { future, resolve, reject } = createFuture<T>();
 
-  let frame: Frame<T>;
-  evaluate(function* () {
-    frame = yield* createFrame<T>();
+  let frame: NewFrame<T>;
+  evaluate<NewFrame<T>>(function* () {
+    frame = yield* createFrame<T>()
   });
 
+  //@ts-expect-error frame will always be defined
+  return createTask(frame, block);
+}
+
+function createTask<T>({ enter, frame }: NewFrame<T>, block: () => Operation<T>): Task<T> {
+
+  let { future, resolve, reject } = createFuture<T>();
+
   evaluate(function* () {
-    let { outcome } = yield* frame.enter(block);
+    let { outcome } = yield* enter(block);
     if (outcome.type === "resolved") {
       resolve(outcome.value);
     } else {
@@ -38,39 +45,53 @@ export function run<T>(block: () => Operation<T>): Task<T> {
 }
 
 interface Frame<T = unknown> extends Computation<Final<T>> {
-  enter(block: () => Operation<T>): Computation<Final<T>>;
+  context: Record<string, unknown>;
+  resources: Set<Frame>;
+  state: State;
   destroy(): Computation<Result<void>>;
 }
 
-function createFrame<T>(): Computation<Frame<T>> {
+interface NewFrame<T> {
+  frame: Frame<T>;
+  enter(block: () => Operation<T>): Computation<Final<T>>;
+}
+
+function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
+  let context = parent ? Object.create(parent.context) : {};
+  let listeners: Array<(outcome: Final<T>) => void> = [];
   let final: Final<T> | undefined;
   let resources = new Set<Frame>();
   let controller = new AbortController();
   let { signal } = controller;
-  return reset<Frame<T>>(function* () {
-    let listeners: Array<(outcome: Final<T>) => void> = [];
-    let [frame, block] = yield* shift<[Frame, () => Operation<T>]>(function* (k) {
-      let self: Frame<T> = {
-        *enter(block: () => Operation<T>) {
-          k([self, block]);
-          return yield* self;
-        },
-        *destroy() {
-          controller.abort();
-          let { destruction: result } = yield* self;
-          return result;
-        },
-        *[Symbol.iterator]() {
-          if (final) {
-            return final;
-          } else {
-            return yield* shift<Final<T>>(function* (k) {
-              listeners.push(k);
-            });
-          }
-        },
-      };
-      return self;
+
+  let frame: Frame<T> = {
+    context,
+    resources,
+    state: { type: 'running', current: { type: 'resolved', value: void 0 } },
+    *[Symbol.iterator]() {
+      if (final) {
+        return final;
+      } else {
+        return yield* shift<Final<T>>(function* (k) {
+          listeners.push(k);
+        });
+      }
+    },
+    *destroy() {
+      controller.abort();
+      let { destruction: result } = yield* frame;
+      return result;
+    }
+  }
+
+
+  type Enter<T> = (fn: () => Operation<T>) => Computation<Final<T>>;
+  let enter = yield* reset<Enter<T>>(function* () {
+    let block = yield* shift<() => Operation<T>>(function* (k) {
+      return function*(block: () => Operation<T>) {
+        k(block);
+        return yield* frame;
+      }
     });
 
     let iterator = lazy(() => block()[Symbol.iterator]());
@@ -79,7 +100,6 @@ function createFrame<T>(): Computation<Frame<T>> {
       frame,
       iterator,
       start: $next(undefined),
-      resources,
       signal,
     });
 
@@ -102,7 +122,6 @@ function createFrame<T>(): Computation<Frame<T>> {
       frame,
       iterator: iterator as () => Iterator<Instruction, void>,
       start: $abort(),
-      resources,
     });
 
     // The last bit of cleanup is to terminate all resources since they
@@ -151,18 +170,19 @@ function createFrame<T>(): Computation<Frame<T>> {
       listener(final);
     }
   });
+  return { frame, enter };
 }
 
 interface ReduceOptions<T> {
   frame: Frame;
   iterator(): Iterator<Instruction, T>;
-  resources: Set<Frame>;
   start: (i: Iterator<Instruction, T>) => IteratorResult<Instruction, T>;
   signal?: AbortSignal;
 }
 
 function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
-  let { iterator, frame, resources, signal } = options;
+  let { iterator, frame,  signal } = options;
+  let { resources } = frame;
 
   try {
     return yield* shift<Exit<T>>(function* (exit) {
@@ -201,12 +221,12 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
             });
           } else if (instruction.type === "action") {
             let { operation } = instruction;
-            let yieldingTo = yield* createFrame();
-            state = { type: "yielding", to: yieldingTo };
+            let yieldingTo = yield* createFrame(frame);
+            state = { type: "yielding", to: yieldingTo.frame };
             let result = yield* shift<Result>(function* instruction(k) {
               let $return = (result: Result) => {
                 evaluate(function* () {
-                  let termination = yield* yieldingTo.destroy();
+                  let termination = yield* yieldingTo.frame.destroy();
                   if (termination.type === "resolved") {
                     k(result);
                   } else {
@@ -241,8 +261,8 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
               : $throw(result.error);
           } else if (instruction.type === "resource") {
             let { operation } = instruction;
-            let resource = yield* createFrame();
-            state = { type: "yielding", to: resource };
+            let resource = yield* createFrame(frame);
+            state = { type: "yielding", to: resource.frame };
             let result = yield* shift<Result>(function* (k) {
               let provisioned = false;
 
@@ -268,7 +288,7 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
               });
             });
             state = { type: "running", current: result };
-            resources.add(resource);
+            resources.add(resource.frame);
             getNext = result.type === "resolved"
               ? $next(result.value)
               : $throw(result.error);
