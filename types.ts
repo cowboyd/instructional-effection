@@ -16,6 +16,9 @@ export type Instruction<T = any> = {
   type: "action";
   operation(resolve: Resolve<T>, reject: Reject): Operation<void>;
 } | {
+  type: "spawn";
+  operation(): Operation<T>;
+} | {
   type: "suspend";
   then?(): void;
 } | {

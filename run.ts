@@ -4,23 +4,23 @@ import { createFuture, Result } from "./future.ts";
 import { lazy } from "./lazy.ts";
 
 export function run<T>(block: () => Operation<T>): Task<T> {
-  let frame: NewFrame<T>;
+  let newFrame: NewFrame<T>;
   evaluate<NewFrame<T>>(function* () {
-    frame = yield* createFrame<T>();
+    newFrame = yield* createFrame<T>();
+    yield* newFrame.enter(block);
   });
 
-  //@ts-expect-error frame will always be defined
-  return createTask(frame, block);
+  //@ts-expect-error not sure how to my TS recognize this
+  let { frame } = newFrame;
+
+  return createTask(frame);
 }
 
-function createTask<T>(
-  { enter, frame }: NewFrame<T>,
-  block: () => Operation<T>,
-): Task<T> {
+function createTask<T>(frame: Frame<T>): Task<T> {
   let { future, resolve, reject } = createFuture<T>();
 
   evaluate(function* () {
-    let { outcome } = yield* enter(block);
+    let { outcome } = yield* frame;
     if (outcome.type === "resolved") {
       resolve(outcome.value);
     } else {
@@ -291,6 +291,27 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
               current: { type: "resolved", value: frame },
             };
             getNext = $next(frame);
+          } else if (instruction.type === 'spawn') {
+            let { operation } = instruction;
+            let { enter, frame: child } = yield* createFrame(frame);
+            frame.resources.add(child);
+            yield* reset(function*() {
+              let final = yield* enter(operation);
+              let { outcome, destruction } = final
+              frame.resources.delete(child);
+              let successfullyTerminated = final.exit.type === 'termination' && destruction.type === 'resolved';
+              if (outcome.type === 'rejected' && !successfullyTerminated) {
+                let { state } = frame;
+                let { error } = outcome;
+                exit({ type: "failure", state, error, });
+              }
+            });
+            let task = createTask(child);
+            frame.state = {
+              type: "running",
+              current: { type: "resolved", value: task },
+            };
+            getNext = $next(createTask(child));
           }
         }
       }
