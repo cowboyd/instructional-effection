@@ -1,23 +1,84 @@
-import { run, sleep, spawn, log } from '../mod.ts';
+import {
+  log,
+  LogContext,
+  Operation,
+  resource,
+  run,
+  sleep,
+  spawn,
+  subscribe,
+  stream,
+  Task,
+} from "../mod.ts";
 
-await run(function*() {
-  yield* log('begin');
+import { keypress, KeyPressEvent } from "https://deno.land/x/cliffy@v0.25.2/keypress/mod.ts";
 
-  yield* spawn(function*() {
-    yield* log('entering')
+await run(function* () {
+  yield* useConsoleLogger();
+  yield* log("begin");
+
+  yield* spawn(function* () {
+    yield* log("entering");
     try {
       while (true) {
-        yield* sleep(100)
-        yield* log('in loop');
+        yield* sleep(800);
+        yield* log("in loop");
       }
     } finally {
-      yield* log('exiting');
+      yield* log("exiting");
     }
   });
 
-  yield* sleep(1000);
+  yield* sleep(10000);
 
-  yield* log('end');
+  yield* log("end");
 });
 
-console.log('done');
+console.log("done");
+
+import { readKeypress } from "https://deno.land/x/keypress@0.0.8/mod.ts";
+
+function useConsoleLogger(): Operation<void> {
+  return resource(function* (provide) {
+
+    let toggle = yield* useToggle(function*() {
+      let log = yield* LogContext;
+      let msgs = yield* log.output;
+      for (let next = yield* msgs; !next.done; next = yield* msgs) {
+        console.dir(next.value);
+      }
+    });
+
+    yield* spawn(function*() {
+      let keys = yield* stream(readKeypress());
+      for (let next = yield* keys; !next.done; next = yield* keys) {
+        yield* toggle();
+      }
+    });
+
+    yield* provide();
+  });
+}
+
+type Toggle = () => Operation<void>;
+
+function useToggle(block: () => Operation<void>): Operation<Toggle> {
+  return resource(function*(provide) {
+    let task: Task<void> | undefined;
+
+    try {
+      yield* provide(function*() {
+        if (task) {
+          yield* task.halt();
+          task = void 0;
+        } else {
+          task = yield* spawn(block);
+        }
+      });
+    } finally {
+      if (task) {
+        yield* task.halt();
+      }
+    }
+  });
+}

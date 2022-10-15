@@ -4,18 +4,19 @@ import { createFuture, Result } from "./future.ts";
 import { lazy } from "./lazy.ts";
 
 export function run<T>(block: () => Operation<T>): Task<T> {
-
   let frame: NewFrame<T>;
   evaluate<NewFrame<T>>(function* () {
-    frame = yield* createFrame<T>()
+    frame = yield* createFrame<T>();
   });
 
   //@ts-expect-error frame will always be defined
   return createTask(frame, block);
 }
 
-function createTask<T>({ enter, frame }: NewFrame<T>, block: () => Operation<T>): Task<T> {
-
+function createTask<T>(
+  { enter, frame }: NewFrame<T>,
+  block: () => Operation<T>,
+): Task<T> {
   let { future, resolve, reject } = createFuture<T>();
 
   evaluate(function* () {
@@ -67,7 +68,7 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
   let frame: Frame<T> = {
     context,
     resources,
-    state: { type: 'running', current: { type: 'resolved', value: void 0 } },
+    state: { type: "running", current: { type: "resolved", value: void 0 } },
     *[Symbol.iterator]() {
       if (final) {
         return final;
@@ -81,17 +82,16 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
       controller.abort();
       let { destruction: result } = yield* frame;
       return result;
-    }
-  }
-
+    },
+  };
 
   type Enter<T> = (fn: () => Operation<T>) => Computation<Final<T>>;
   let enter = yield* reset<Enter<T>>(function* () {
     let block = yield* shift<() => Operation<T>>(function* (k) {
-      return function*(block: () => Operation<T>) {
+      return function* (block: () => Operation<T>) {
         k(block);
         return yield* frame;
-      }
+      };
     });
 
     let iterator = lazy(() => block()[Symbol.iterator]());
@@ -181,7 +181,7 @@ interface ReduceOptions<T> {
 }
 
 function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
-  let { iterator, frame,  signal } = options;
+  let { iterator, frame, signal } = options;
   let { resources } = frame;
 
   try {
@@ -285,8 +285,11 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
             getNext = result.type === "resolved"
               ? $next(result.value)
               : $throw(result.error);
-          } else if (instruction.type === 'getframe') {
-            frame.state = { type: "running", current: { type: 'resolved', value: frame } };
+          } else if (instruction.type === "getframe") {
+            frame.state = {
+              type: "running",
+              current: { type: "resolved", value: frame },
+            };
             getNext = $next(frame);
           }
         }

@@ -6,12 +6,11 @@ export interface Once<T> extends Operation<T> {
 }
 
 export function callback<T>(): Once<T> {
-
   let { resolve, future } = createFuture<T>();
 
   let callback = resolve;
 
   return Object.assign(callback, {
-    [Symbol.iterator]: future[Symbol.iterator]
+    [Symbol.iterator]: future[Symbol.iterator],
   }) as Once<T>;
 }

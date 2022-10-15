@@ -1,12 +1,8 @@
-import type { Operation } from "./types.ts";
-import { expect } from "./expect.ts";
+import type { Operation, Stream } from "./types.ts";
 
-export function* first<T>(events: AsyncIterable<T>): Operation<T | undefined> {
-  let iterator = events[Symbol.asyncIterator]();
-  let next = yield* expect(iterator.next());
-  if (!next.done) {
+export function* first<T>(stream: Stream<T, void>): Operation<T | undefined> {
+  let events = yield* stream;
+  for (let next = yield* events; !next.done; next = yield* events) {
     return next.value;
-  } else {
-    return void 0;
   }
 }

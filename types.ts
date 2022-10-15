@@ -28,18 +28,16 @@ export interface Task<T> extends Future<T> {
   halt(): Future<void>;
 }
 
-export interface Subscription<T,R> {
-  next(): Operation<IteratorResult<T,R>>;
-}
+export type Subscription<T, R> = Operation<IteratorResult<T,R>>
 
-export type Stream<T,TReturn> = Operation<Subscription<T,TReturn>>;
+export type Stream<T, TReturn> = Operation<Subscription<T, TReturn>>;
 
-export interface Port<T,R> {
+export interface Port<T, R> {
   send(message: T): Operation<void>;
   close(value: R): Operation<void>;
 }
 
-export interface Channel<T,R> {
-  input: Port<T,R>;
-  output: Stream<T,R>;
+export interface Channel<T, R> {
+  input: Port<T, R>;
+  output: Stream<T, R>;
 }
