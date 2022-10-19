@@ -6,6 +6,7 @@ import {
   first,
   Operation,
   resource,
+  stream,
   run,
   useAbortSignal,
 } from "../mod.ts";
@@ -34,12 +35,19 @@ export function useEchoServer(port: number): Operation<Server> {
   });
 }
 
+export function* awaitSignal(name: Deno.Signal): Operation<void> {
+  let signals = signal(name);
+  try {
+    yield* first(stream(signals));
+  } finally {
+    signals.dispose();
+  }
+}
+
 await run(function* () {
   let server = yield* useEchoServer(5000);
 
   console.log(`server listening on ${server.hostname}:${server.port}`);
 
-  yield* first(signal("SIGINT"));
-
-  console.log("exiting");
+  yield* awaitSignal('SIGINT');
 });
