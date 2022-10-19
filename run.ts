@@ -46,6 +46,8 @@ function createTask<T>(frame: Frame<T>): Task<T> {
 }
 
 interface Frame<T = unknown> extends Computation<Final<T>> {
+  id: string;
+  ids: number;
   context: Record<string, unknown>;
   resources: Set<Frame>;
   state: State;
@@ -57,7 +59,10 @@ interface NewFrame<T> {
   enter(block: () => Operation<T>): Computation<Final<T>>;
 }
 
+let ids = 0;
+
 function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
+  let id = parent ? `${parent.id}.${parent.ids++}` : `${ids++}`;
   let context = parent ? Object.create(parent.context) : {};
   let listeners: Array<(outcome: Final<T>) => void> = [];
   let final: Final<T> | undefined;
@@ -66,6 +71,8 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
   let { signal } = controller;
 
   let frame: Frame<T> = {
+    id,
+    ids: 1,
     context,
     resources,
     state: { type: "running", current: { type: "resolved", value: void 0 } },

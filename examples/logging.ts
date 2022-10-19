@@ -6,12 +6,9 @@ import {
   run,
   sleep,
   spawn,
-  subscribe,
   stream,
   Task,
 } from "../mod.ts";
-
-import { keypress, KeyPressEvent } from "https://deno.land/x/cliffy@v0.25.2/keypress/mod.ts";
 
 await run(function* () {
   yield* useConsoleLogger();
@@ -22,12 +19,19 @@ await run(function* () {
     try {
       while (true) {
         yield* sleep(800);
-        yield* log("in loop");
+        yield* log("in loop 1");
       }
     } finally {
       yield* log("exiting");
     }
   });
+
+  yield* spawn(function*() {
+    while (true) {
+      yield* sleep(300);
+      yield* log("in second loop");
+    }
+  })
 
   yield* sleep(10000);
 

@@ -9,7 +9,10 @@ export const LogContext = createContext<Channel<LogMessage, void>>(
 
 export function* info(message: string): Operation<void> {
   let { input } = yield* LogContext;
-  yield* input.send({ message, level: "info" });
+
+  let { id } = yield { type: 'getframe' };
+
+  yield* input.send({ message, level: "info", taskId: id });
 }
 
 export function log(message: string): Operation<void> {
@@ -17,6 +20,7 @@ export function log(message: string): Operation<void> {
 }
 
 export interface LogMessage {
+  taskId: string;
   level: string;
   message: string;
 }
