@@ -13,10 +13,11 @@ export function createChannel<T, TClose>(): Channel<T, TClose> {
         };
 
         let subscription: Subscription<T, TClose> = {
-          [Symbol.iterator]: () => action<IteratorResult<T, TClose>>(function* (resolve) {
-            subscriber.notify = resolve;
-            yield* suspend();
-          })[Symbol.iterator](),
+          [Symbol.iterator]: () =>
+            action<IteratorResult<T, TClose>>(function* (resolve) {
+              subscriber.notify = resolve;
+              yield* suspend();
+            })[Symbol.iterator](),
         };
         subscribers.add(subscriber);
         try {

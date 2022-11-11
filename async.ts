@@ -9,20 +9,20 @@ export function expect<T>(promise: Promise<T>): Operation<T> {
   });
 }
 
-export function subscribe<T, R>(iterator: AsyncIterator<T, R>): Subscription<T,R> {
+export function subscribe<T, R>(iter: AsyncIterator<T, R>): Subscription<T, R> {
   return {
-    [Symbol.iterator]: () => expect(iterator.next())[Symbol.iterator]()
+    [Symbol.iterator]: () => expect(iter.next())[Symbol.iterator](),
   };
 }
 
-export function stream<T,R>(iterable: AsyncIterable<T, R>): Stream<T,R> {
+export function stream<T, R>(iterable: AsyncIterable<T, R>): Stream<T, R> {
   return {
     *[Symbol.iterator]() {
-      return subscribe(iterable[Symbol.asyncIterator]())
+      return subscribe(iterable[Symbol.asyncIterator]());
     },
-  }
+  };
 }
 
-interface AsyncIterable<T,TReturn = unknown> {
-  [Symbol.asyncIterator](): AsyncIterator<T,TReturn>;
+interface AsyncIterable<T, TReturn = unknown> {
+  [Symbol.asyncIterator](): AsyncIterator<T, TReturn>;
 }

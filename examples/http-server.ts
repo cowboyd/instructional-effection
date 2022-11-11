@@ -6,8 +6,8 @@ import {
   first,
   Operation,
   resource,
-  stream,
   run,
+  stream,
   useAbortSignal,
 } from "../mod.ts";
 
@@ -49,5 +49,5 @@ await run(function* () {
 
   console.log(`server listening on ${server.hostname}:${server.port}`);
 
-  yield* awaitSignal('SIGINT');
+  yield* awaitSignal("SIGINT");
 });

@@ -31,7 +31,7 @@ export interface Task<T> extends Future<T> {
   halt(): Future<void>;
 }
 
-export type Subscription<T, R> = Operation<IteratorResult<T,R>>
+export type Subscription<T, R> = Operation<IteratorResult<T, R>>;
 
 export type Stream<T, TReturn> = Operation<Subscription<T, TReturn>>;
 

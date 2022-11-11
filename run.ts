@@ -191,141 +191,145 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
   let { iterator, frame, signal } = options;
   let { resources } = frame;
 
-  try {
-    return yield* shift<Exit<T>>(function* (exit) {
-      if (signal) {
-        let listener = () => exit({ type: "termination", state: frame.state });
-        signal.addEventListener("abort", listener, {
-          once: true,
+  return yield* shift<Exit<T>>(function* (exit) {
+    if (signal) {
+      let listener = () => exit({ type: "termination", state: frame.state });
+      signal.addEventListener("abort", listener, {
+        once: true,
+      });
+    }
+
+    let getNext = options.start;
+
+    while (!signal || !signal.aborted) {
+      let next: IteratorResult<Instruction, T>;
+      try {
+        next = getNext(iterator());
+      } catch (error) {
+        exit({
+          type: "result",
+          result: { type: "rejected", error },
         });
+        break;
       }
-
-      let getNext = options.start;
-
-      while (!signal || !signal.aborted) {
-        let next = getNext(iterator());
-        if (next.done) {
-          exit({
-            type: "result",
-            result: { type: "resolved", value: next.value },
+      if (next.done) {
+        exit({
+          type: "result",
+          result: { type: "resolved", value: next.value },
+        });
+        break;
+      } else {
+        let instruction = next.value;
+        if (instruction.type === "suspend") {
+          let { then } = instruction;
+          frame.state = { type: "suspended" };
+          yield* shift<never>(function* () {
+            then && then();
           });
-          break;
-        } else {
-          let instruction = next.value;
-          if (instruction.type === "suspend") {
-            let { then } = instruction;
-            frame.state = { type: "suspended" };
-            yield* shift<never>(function* () {
-              then && then();
-            });
-          } else if (instruction.type === "action") {
-            let { operation } = instruction;
-            let yieldingTo = yield* createFrame(frame);
-            frame.state = { type: "yielding", to: yieldingTo.frame };
-            let result = yield* shift<Result>(function* instruction(k) {
-              let $return = (result: Result) => {
-                evaluate(function* () {
-                  let termination = yield* yieldingTo.frame.destroy();
-                  if (termination.type === "resolved") {
-                    k(result);
-                  } else {
-                    k(termination);
-                  }
-                });
-              };
-              let resolve: Resolve = (value) =>
-                $return({ type: "resolved", value });
-              let reject: Reject = (error) =>
-                $return({ type: "rejected", error });
-
-              let final = yield* yieldingTo.enter(() =>
-                operation(resolve, reject)
-              );
-
-              if (
-                final.exit.type === "result" &&
-                final.exit.result.type === "resolved"
-              ) {
-                k({
-                  type: "rejected",
-                  error: new Error(
-                    "reached the end of an action, but resolve() or reject() were never called",
-                  ),
-                });
-              }
-            });
-            frame.state = { type: "running", current: result };
-            getNext = result.type === "resolved"
-              ? $next(result.value)
-              : $throw(result.error);
-          } else if (instruction.type === "resource") {
-            let { operation } = instruction;
-            let resource = yield* createFrame(frame);
-            frame.state = { type: "yielding", to: resource.frame };
-            let result = yield* shift<Result>(function* (k) {
-              let provisioned = false;
-
-              let provide = (value: unknown) => {
-                provisioned = true;
-                let then = () => {
-                  k({ type: "resolved", value });
-                };
-                return [{ type: "suspend", then }] as Operation<void>;
-              };
-
-              yield* reset(function* () {
-                let { outcome } = yield* resource.enter(() =>
-                  operation(provide)
-                );
-                if (outcome.type === "rejected") {
-                  if (provisioned) {
-                    let { state } = frame;
-                    exit({ type: "failure", state, error: outcome.error });
-                  } else {
-                    k(outcome);
-                  }
+        } else if (instruction.type === "action") {
+          let { operation } = instruction;
+          let yieldingTo = yield* createFrame(frame);
+          frame.state = { type: "yielding", to: yieldingTo.frame };
+          let result = yield* shift<Result>(function* instruction(k) {
+            let $return = (result: Result) => {
+              evaluate(function* () {
+                let termination = yield* yieldingTo.frame.destroy();
+                if (termination.type === "resolved") {
+                  k(result);
+                } else {
+                  k(termination);
                 }
               });
-            });
-            frame.state = { type: "running", current: result };
-            resources.add(resource.frame);
-            getNext = result.type === "resolved"
-              ? $next(result.value)
-              : $throw(result.error);
-          } else if (instruction.type === "getframe") {
-            frame.state = {
-              type: "running",
-              current: { type: "resolved", value: frame },
             };
-            getNext = $next(frame);
-          } else if (instruction.type === 'spawn') {
-            let { operation } = instruction;
-            let { enter, frame: child } = yield* createFrame(frame);
-            frame.resources.add(child);
-            yield* reset(function*() {
-              let final = yield* enter(operation);
-              let { outcome, destruction } = final
-              frame.resources.delete(child);
-              let successfullyTerminated = final.exit.type === 'termination' && destruction.type === 'resolved';
-              if (outcome.type === 'rejected' && !successfullyTerminated) {
-                let { state } = frame;
-                let { error } = outcome;
-                exit({ type: "failure", state, error, });
+            let resolve: Resolve = (value) =>
+              $return({ type: "resolved", value });
+            let reject: Reject = (error) =>
+              $return({ type: "rejected", error });
+
+            let final = yield* yieldingTo.enter(() =>
+              operation(resolve, reject)
+            );
+
+            if (
+              final.exit.type === "result" &&
+              final.exit.result.type === "resolved"
+            ) {
+              k({
+                type: "rejected",
+                error: new Error(
+                  "reached the end of an action, but resolve() or reject() were never called",
+                ),
+              });
+            }
+          });
+          frame.state = { type: "running", current: result };
+          getNext = result.type === "resolved"
+            ? $next(result.value)
+            : $throw(result.error);
+        } else if (instruction.type === "resource") {
+          let { operation } = instruction;
+          let resource = yield* createFrame(frame);
+          frame.state = { type: "yielding", to: resource.frame };
+          let result = yield* shift<Result>(function* (k) {
+            let provisioned = false;
+
+            let provide = (value: unknown) => {
+              provisioned = true;
+              let then = () => {
+                k({ type: "resolved", value });
+              };
+              return [{ type: "suspend", then }] as Operation<void>;
+            };
+
+            yield* reset(function* () {
+              let { outcome } = yield* resource.enter(() => operation(provide));
+              if (outcome.type === "rejected") {
+                if (provisioned) {
+                  let { state } = frame;
+                  exit({ type: "failure", state, error: outcome.error });
+                } else {
+                  k(outcome);
+                }
               }
             });
-            let task = createTask(child);
-            frame.state = {
-              type: "running",
-              current: { type: "resolved", value: task },
-            };
-            getNext = $next(createTask(child));
-          }
+          });
+          frame.state = { type: "running", current: result };
+          resources.add(resource.frame);
+          getNext = result.type === "resolved"
+            ? $next(result.value)
+            : $throw(result.error);
+        } else if (instruction.type === "getframe") {
+          frame.state = {
+            type: "running",
+            current: { type: "resolved", value: frame },
+          };
+          getNext = $next(frame);
+        } else if (instruction.type === "spawn") {
+          let { operation } = instruction;
+          let { enter, frame: child } = yield* createFrame(frame);
+          frame.resources.add(child);
+          yield* reset(function* () {
+            let final = yield* enter(operation);
+            let { outcome, destruction } = final;
+            frame.resources.delete(child);
+            let successfullyTerminated = final.exit.type === "termination" &&
+              destruction.type === "resolved";
+            if (outcome.type === "rejected" && !successfullyTerminated) {
+              let { state } = frame;
+              let { error } = outcome;
+              exit({ type: "failure", state, error });
+            }
+          });
+          let task = createTask(child);
+          frame.state = {
+            type: "running",
+            current: { type: "resolved", value: task },
+          };
+          getNext = $next(createTask(child));
         }
       }
-    });
-  } catch (error) {
-    return { type: "result", result: { type: "rejected", error } };
-  }
+    }
+  });
 }
 
 type State =

@@ -26,12 +26,12 @@ await run(function* () {
     }
   });
 
-  yield* spawn(function*() {
+  yield* spawn(function* () {
     while (true) {
       yield* sleep(300);
       yield* log("in second loop");
     }
-  })
+  });
 
   yield* sleep(10000);
 
@@ -44,8 +44,7 @@ import { readKeypress } from "https://deno.land/x/keypress@0.0.8/mod.ts";
 
 function useConsoleLogger(): Operation<void> {
   return resource(function* (provide) {
-
-    let toggle = yield* useToggle(function*() {
+    let toggle = yield* useToggle(function* () {
       let log = yield* LogContext;
       let msgs = yield* log.output;
       for (let next = yield* msgs; !next.done; next = yield* msgs) {
@@ -53,7 +52,7 @@ function useConsoleLogger(): Operation<void> {
       }
     });
 
-    yield* spawn(function*() {
+    yield* spawn(function* () {
       let keys = yield* stream(readKeypress());
       for (let next = yield* keys; !next.done; next = yield* keys) {
         yield* toggle();
@@ -67,11 +66,11 @@ function useConsoleLogger(): Operation<void> {
 type Toggle = () => Operation<void>;
 
 function useToggle(block: () => Operation<void>): Operation<Toggle> {
-  return resource(function*(provide) {
+  return resource(function* (provide) {
     let task: Task<void> | undefined;
 
     try {
-      yield* provide(function*() {
+      yield* provide(function* () {
         if (task) {
           yield* task.halt();
           task = void 0;
