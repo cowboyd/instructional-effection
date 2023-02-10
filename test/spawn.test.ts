@@ -1,11 +1,10 @@
 import { describe, expect, it } from "./suite.ts";
-import { expect as $expect, run, suspend, sleep, spawn } from "../mod.ts";
+import { expect as $expect, run, sleep, spawn, suspend } from "../mod.ts";
 
-
-describe('spawn', () => {
-  it('can spawn a new child task', async () => {
-    let root = run(function*() {
-      let child = yield* spawn(function*() {
+describe("spawn", () => {
+  it("can spawn a new child task", async () => {
+    let root = run(function* () {
+      let child = yield* spawn(function* () {
         let one = yield* $expect(Promise.resolve(12));
         let two = yield* $expect(Promise.resolve(55));
 
@@ -17,10 +16,10 @@ describe('spawn', () => {
     await expect(root).resolves.toEqual(67);
   });
 
-  it('halts child when halted', async () => {
+  it("halts child when halted", async () => {
     let child;
-    let root = run(function*() {
-      child = yield* spawn(function*() {
+    let root = run(function* () {
+      child = yield* spawn(function* () {
         yield* suspend();
       });
 
@@ -29,13 +28,13 @@ describe('spawn', () => {
 
     await root.halt();
 
-    await expect(child).rejects.toHaveProperty('message', 'halted');
+    await expect(child).rejects.toHaveProperty("message", "halted");
   });
 
-  it('halts child when finishing normally', async () => {
+  it("halts child when finishing normally", async () => {
     let child;
-    let result = run(function*() {
-      child = yield* spawn(function*() {
+    let result = run(function* () {
+      child = yield* spawn(function* () {
         yield* suspend();
       });
 
@@ -43,28 +42,28 @@ describe('spawn', () => {
     });
 
     await expect(result).resolves.toEqual(1);
-    await expect(child).rejects.toHaveProperty('message', 'halted');
+    await expect(child).rejects.toHaveProperty("message", "halted");
   });
 
-  it('halts child when errored', async () => {
+  it("halts child when errored", async () => {
     let child;
-    let root = run(function*() {
-      child = yield* spawn(function*() {
+    let root = run(function* () {
+      child = yield* spawn(function* () {
         yield* suspend();
       });
 
-      throw new Error('boom');
+      throw new Error("boom");
     });
 
-    await expect(root).rejects.toHaveProperty('message', 'boom');
-    await expect(child).rejects.toHaveProperty('message', 'halted');
+    await expect(root).rejects.toHaveProperty("message", "boom");
+    await expect(child).rejects.toHaveProperty("message", "halted");
   });
 
-  it('rejects parent when child errors', async () => {
+  it("rejects parent when child errors", async () => {
     let child;
     let error = new Error("moo");
-    let root = run(function*() {
-      child = yield* spawn(function*() {
+    let root = run(function* () {
+      child = yield* spawn(function* () {
         yield* sleep(1);
         throw error;
       });
@@ -76,9 +75,9 @@ describe('spawn', () => {
     await expect(child).rejects.toEqual(error);
   });
 
-  it('finishes normally when child halts', async () => {
+  it("finishes normally when child halts", async () => {
     let child;
-    let root = run(function*() {
+    let root = run(function* () {
       child = yield* spawn(() => suspend());
       yield* child.halt();
 
@@ -86,13 +85,13 @@ describe('spawn', () => {
     });
 
     await expect(root).resolves.toEqual("foo");
-    await expect(child).rejects.toHaveProperty('message', 'halted');
+    await expect(child).rejects.toHaveProperty("message", "halted");
   });
 
-  it('rejects when child errors during completing', async () => {
+  it("rejects when child errors during completing", async () => {
     let child;
-    let root = run(function*() {
-      child = yield* spawn(function*() {
+    let root = run(function* () {
+      child = yield* spawn(function* () {
         try {
           yield* suspend();
         } finally {
@@ -103,14 +102,14 @@ describe('spawn', () => {
       return "foo";
     });
 
-    await expect(root).rejects.toHaveProperty('message', 'moo');
-    await expect(child).rejects.toHaveProperty('message', 'moo');
+    await expect(root).rejects.toHaveProperty("message", "moo");
+    await expect(child).rejects.toHaveProperty("message", "moo");
   });
 
-  it('rejects when child errors during halting', async () => {
+  it("rejects when child errors during halting", async () => {
     let child;
-    let root = run(function*() {
-      child = yield* spawn(function*() {
+    let root = run(function* () {
+      child = yield* spawn(function* () {
         try {
           yield* suspend();
         } finally {
@@ -122,15 +121,15 @@ describe('spawn', () => {
       return "foo";
     });
 
-    await expect(root.halt()).rejects.toHaveProperty('message', 'moo');
-    await expect(child).rejects.toHaveProperty('message', 'moo');
-    await expect(root.halt()).rejects.toHaveProperty('message', 'moo');
+    await expect(root.halt()).rejects.toHaveProperty("message", "moo");
+    await expect(child).rejects.toHaveProperty("message", "moo");
+    await expect(root.halt()).rejects.toHaveProperty("message", "moo");
   });
 
-  it('halts when child finishes during asynchronous halt', async () => {
+  it("halts when child finishes during asynchronous halt", async () => {
     let didFinish = false;
-    let root = run(function*() {
-      yield* spawn(function*() {
+    let root = run(function* () {
+      yield* spawn(function* () {
         yield* sleep(5);
       });
       try {
@@ -146,39 +145,44 @@ describe('spawn', () => {
     expect(didFinish).toEqual(true);
   });
 
-  it('runs destructors in reverse order and in series', async () => {
+  it("runs destructors in reverse order and in series", async () => {
     let result: string[] = [];
 
-    await run(function*() {
-      yield* spawn(function*() {
+    await run(function* () {
+      yield* spawn(function* () {
         try {
           yield* suspend();
         } finally {
-          result.push('first start');
+          result.push("first start");
           yield* sleep(5);
-          result.push('first done');
+          result.push("first done");
         }
       });
-      yield* spawn(function*() {
+      yield* spawn(function* () {
         try {
           yield* suspend();
         } finally {
-          result.push('second start');
+          result.push("second start");
           yield* sleep(10);
-          result.push('second done');
+          result.push("second done");
         }
       });
     });
 
-    expect(result).toEqual(['second start', 'second done', 'first start', 'first done']);
+    expect(result).toEqual([
+      "second start",
+      "second done",
+      "first start",
+      "first done",
+    ]);
   });
 
-  it('halts children on explicit halt', async () => {
+  it("halts children on explicit halt", async () => {
     let child;
-    let root = run(function*() {
-      child = yield* spawn(function*() {
+    let root = run(function* () {
+      child = yield* spawn(function* () {
         yield* sleep(20);
-        return 'foo';
+        return "foo";
       });
 
       return 1;
@@ -186,6 +190,6 @@ describe('spawn', () => {
 
     await root.halt();
 
-    await expect(child).rejects.toHaveProperty('message', 'halted');
+    await expect(child).rejects.toHaveProperty("message", "halted");
   });
 });

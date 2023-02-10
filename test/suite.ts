@@ -8,7 +8,7 @@ export function* createNumber(value: number): Operation<number> {
   return value;
 }
 
-export function *blowUp<T>(): Operation<T> {
+export function* blowUp<T>(): Operation<T> {
   yield* sleep(1);
-  throw new Error('boom');
+  throw new Error("boom");
 }
