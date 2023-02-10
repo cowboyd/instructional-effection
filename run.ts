@@ -58,6 +58,8 @@ interface Frame<T = unknown> extends Computation<Final<T>> {
 type FrameState = {
   type: "running";
   current: Result;
+} | {
+  type: "suspended";
 };
 
 type FrameEvent<T> = IteratorResult<FrameState, Final<T>>;
@@ -87,6 +89,11 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
       listener(event);
     }
   }
+
+  let update = (state: State) => {
+    frame.state = state;
+    notify({ done: false, value: state } as IteratorYieldResult<FrameState>);
+  };
 
   let frame: Frame<T> = {
     id,
@@ -142,6 +149,7 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
       frame,
       iterator,
       start: $next(undefined),
+      update,
       signal,
     });
 
@@ -164,6 +172,7 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
       frame,
       iterator: iterator as () => Iterator<Instruction, void>,
       start: $abort(),
+      update,
     });
 
     // The last bit of cleanup is to terminate all resources since they
@@ -217,11 +226,12 @@ interface ReduceOptions<T> {
   frame: Frame;
   iterator(): Iterator<Instruction, T>;
   start: (i: Iterator<Instruction, T>) => IteratorResult<Instruction, T>;
+  update: (state: State) => void;
   signal?: AbortSignal;
 }
 
 function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
-  let { iterator, frame, signal } = options;
+  let { iterator, frame, signal, update } = options;
   let { resources } = frame;
 
   return yield* shift<Exit<T>>(function* (exit) {
@@ -255,7 +265,7 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
         let instruction = next.value;
         if (instruction.type === "suspend") {
           let { then } = instruction;
-          frame.state = { type: "suspended" };
+          update({ type: "suspended" });
           yield* shift<never>(function* () {
             then && then();
           });
@@ -264,20 +274,45 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
           let yieldingTo = yield* createFrame(frame);
           frame.state = { type: "yielding", to: yieldingTo.frame };
           let result = yield* shift<Result>(function* instruction(k) {
-            let $return = (result: Result) => {
-              evaluate(function* () {
-                let termination = yield* yieldingTo.frame.destroy();
-                if (termination.type === "resolved") {
-                  k(result);
-                } else {
-                  k(termination);
+
+            let $result: Result | undefined;
+
+            function* $return(result: Result) {
+              let termination = yield* yieldingTo.frame.destroy();
+              if (termination.type === "resolved") {
+                k(result);
+              } else {
+                k(termination);
+              }
+            }
+
+            let $resolve: Resolve = (value) => {
+              $result = { type: "resolved", value };
+            }
+            let $reject: Reject = (error) =>
+              $result = { type: "rejected", error };
+
+            let resolve: Resolve = (value) => $resolve(value);
+            let reject: Reject = (error) => $reject(error);
+
+            yield* reset(function*() {
+              let subscription = yieldingTo.frame.subscribe();
+
+              while (true) {
+                let event = yield* subscription;
+
+                if (event.done || event.value.type === "suspended") {
+                  if ($result) {
+                    yield* $return($result);
+                  } else {
+                    $resolve = (value) => evaluate(() => $return({ type: "resolved", value }));
+                    $reject = (error) => evaluate(() => $return({ type: "rejected", error }))
+                  }
+                  break;
                 }
-              });
-            };
-            let resolve: Resolve = (value) =>
-              $return({ type: "resolved", value });
-            let reject: Reject = (error) =>
-              $return({ type: "rejected", error });
+              }
+              subscription.drop();
+            });
 
             let final = yield* yieldingTo.enter(() =>
               operation(resolve, reject)
@@ -285,14 +320,9 @@ function* reduce<T>(options: ReduceOptions<T>): Computation<Exit<T>> {
 
             if (
               final.exit.type === "result" &&
-              final.exit.result.type === "resolved"
+              final.exit.result.type === "rejected"
             ) {
-              k({
-                type: "rejected",
-                error: new Error(
-                  "reached the end of an action, but resolve() or reject() were never called",
-                ),
-              });
+              k(final.exit.result);
             }
           });
           frame.state = { type: "running", current: result };
