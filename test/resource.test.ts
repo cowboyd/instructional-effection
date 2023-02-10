@@ -1,10 +1,10 @@
 import { describe, expect, it } from "./suite.ts";
-import { run, suspend, sleep, spawn, resource } from "../mod.ts";
+import { run, suspend, sleep, spawn, resource, Operation } from "../mod.ts";
 
-const myResource = {
-  name: 'myResource',
-  [Symbol.iterator]: () => resource<{ status: string}> (function*(provide) {
-    let container = { status: 'pending' };
+type State = { status: string; };
+
+function createResource(container: State): Operation<State> {
+  return resource(function*(provide) {
     yield* spawn(function*() {
       yield* sleep(5);
       container.status = 'active';
@@ -17,36 +17,48 @@ const myResource = {
     } finally {
       container.status = 'finalized';
     }
-  })[Symbol.iterator]()
+  });
 }
 
 describe('resource', () => {
-  describe('with spawned resource', () => {
-    it('runs resource in task scope', async () => {
-      await run(function*() {
-        let result = yield* myResource;
-        expect(result.status).toEqual('pending');
-        yield* sleep(10);
-        expect(result.status).toEqual('active');
+  it('runs resource in task scope', async () => {
+    let state = { status: 'pending' };
+    await run(function*() {
+      let result = yield* createResource(state);
+      expect(result).toBe(state);
+      expect(state.status).toEqual('pending');
+      yield* sleep(10);
+      expect(state.status).toEqual('active');
+    });
+    expect(state.status).toEqual('finalized');
+  });
+
+  it('throws init error', async () => {
+    let task = run(function*() {
+      yield* resource(function*() {
+        throw new Error('moo');
       });
+      yield* suspend();
     });
 
-    it('throws init error', async () => {
-      let task = run(function*() {
-        yield* resource(function*() {
-          throw new Error('moo');
-        });
-        yield* suspend();
-      });
+    await expect(task).rejects.toHaveProperty('message', 'moo');
+  });
 
-      await expect(task).rejects.toHaveProperty('message', 'moo');
+  it('terminates resource when task completes', async () => {
+    let result = await run(function*() {
+      return yield* createResource({ status: 'pending' });
     });
+    expect(result.status).toEqual('finalized');
+  });
 
-    it('terminates resource when task completes', async () => {
-      let result = await run(function*() {
-        return yield* myResource;
-      });
-      expect(result.status).toEqual('finalized');
+  it("can halt the resource constructor if the containing task halts", async () => {
+    let state = { status: 'pending' };
+    let task = run(function*() {
+      yield* createResource(state);
+      yield* suspend();
     });
+    await task.halt();
+
+    expect(state.status).toEqual("pending");
   });
 });
