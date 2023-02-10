@@ -1,5 +1,5 @@
 import type { Instruction, Operation, Reject, Resolve, Task } from "./types.ts";
-import { Computation, evaluate, reset, shift } from "./deps.ts";
+import { Computation, Continuation, evaluate, reset, shift } from "./deps.ts";
 import { createFuture, Result } from "./future.ts";
 import { lazy } from "./lazy.ts";
 
@@ -52,6 +52,18 @@ interface Frame<T = unknown> extends Computation<Final<T>> {
   resources: Set<Frame>;
   state: State;
   destroy(): Computation<Result<void>>;
+  subscribe(): FrameSubscription<T>;
+}
+
+type FrameState = {
+  type: "running";
+  current: Result;
+};
+
+type FrameEvent<T> = IteratorResult<FrameState, Final<T>>;
+
+interface FrameSubscription<T> extends Computation<FrameEvent<T>> {
+  drop(): void;
 }
 
 interface NewFrame<T> {
@@ -64,11 +76,17 @@ let ids = 0;
 function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
   let id = parent ? `${parent.id}.${parent.ids++}` : `${ids++}`;
   let context = parent ? Object.create(parent.context) : {};
-  let listeners: Array<(outcome: Final<T>) => void> = [];
+  let subscriptions = new Map<FrameSubscription<T>, Continuation<FrameEvent<T>>>();
   let final: Final<T> | undefined;
   let resources = new Set<Frame>();
   let controller = new AbortController();
   let { signal } = controller;
+
+  function notify(event: FrameEvent<T>) {
+    for (let listener of subscriptions.values()) {
+      listener(event);
+    }
+  }
 
   let frame: Frame<T> = {
     id,
@@ -80,9 +98,13 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
       if (final) {
         return final;
       } else {
-        return yield* shift<Final<T>>(function* (k) {
-          listeners.push(k);
-        });
+        let next = frame.subscribe();
+        while (true) {
+          let event = yield* next;
+          if (event.done) {
+            return event.value;
+          }
+        }
       }
     },
     *destroy() {
@@ -90,6 +112,19 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
       let { destruction: result } = yield* frame;
       return result;
     },
+    subscribe() {
+      let subscription = {
+        *[Symbol.iterator]() {
+          return yield* shift<FrameEvent<T>>(function*(k) {
+            subscriptions.set(subscription, k);
+          });
+        },
+        drop() {
+          subscriptions.delete(subscription);
+        }
+      };
+      return subscription;
+    }
   };
 
   type Enter<T> = (fn: () => Operation<T>) => Computation<Final<T>>;
@@ -173,9 +208,7 @@ function* createFrame<T>(parent?: Frame): Computation<NewFrame<T>> {
     //determine final Outcome, and then notify that we're done
     final = { outcome, exit: exitState, destruction };
 
-    for (let listener of listeners) {
-      listener(final);
-    }
+    notify({ done: true, value: final });
   });
   return { frame, enter };
 }
