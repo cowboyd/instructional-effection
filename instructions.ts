@@ -1,4 +1,4 @@
-import type { Operation, Provide, Reject, Resolve } from "./types.ts";
+import type { Operation, Provide, Reject, Resolve, Task } from "./types.ts";
 
 export function suspend(): Operation<void> {
   return [{ type: "suspend" }];
@@ -26,4 +26,12 @@ export function action<T>(
       return yield { type: "action", operation };
     }
   };
+}
+
+export function spawn<T>(block: () => Operation<T>): Operation<Task<T>> {
+  return {
+    *[Symbol.iterator]() {
+      return yield { type: "spawn", operation: block };
+    }
+  }
 }
