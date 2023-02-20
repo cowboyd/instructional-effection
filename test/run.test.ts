@@ -179,7 +179,7 @@ describe("run()", () => {
     await expect(task).rejects.toHaveProperty("message", "boom");
   });
 
-  it.ignore("can halt itself", async () => {
+  it("can halt itself", async () => {
     let task = run(function* () {
       yield* sleep(3);
       task.halt();
@@ -250,6 +250,7 @@ describe("run()", () => {
       expect(error.message).toEqual("boom");
     }
   });
+
   it("propagates errors from promises", async () => {
     try {
       await run(function* () {

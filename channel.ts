@@ -1,6 +1,7 @@
 import type { Channel, Resolve, Stream, Subscription } from "./types.ts";
 import type { Result } from "./future.ts";
 import { action, resource, suspend } from "./instructions.ts";
+import { shift } from "./deps.ts";
 
 export function createChannel<T, TClose>(): Channel<T, TClose> {
   let subscribers = new Set<ChannelSubscriber<T, TClose>>();
@@ -29,10 +30,9 @@ export function createChannel<T, TClose>(): Channel<T, TClose> {
   };
 
   let send = (item: IteratorResult<T, TClose>) => {
-    return action<void>(function* (resolve, reject) {
-      yield* [{
-        type: "suspend",
-        then() {
+    return {
+      *[Symbol.iterator]() {
+        yield () => shift<Result<void>>(function*(k) {
           let result: Result<void> = { type: "resolved", value: void 0 };
           for (let subscriber of subscribers) {
             try {
@@ -41,14 +41,10 @@ export function createChannel<T, TClose>(): Channel<T, TClose> {
               result = { type: "rejected", error };
             }
           }
-          if (result.type === "rejected") {
-            reject(result.error);
-          } else {
-            resolve(result.value);
-          }
-        },
-      }];
-    });
+          k(result);
+        })
+      }
+    }
   };
 
   let input = {
