@@ -1,5 +1,5 @@
 import { describe, expect, it } from "./suite.ts";
-import { action, createScope, resource } from "../mod.ts";
+import { createScope, resource } from "../mod.ts";
 
 describe("Scope", () => {
   it("can be used to run actions", async () => {
@@ -23,6 +23,27 @@ describe("Scope", () => {
     await scope.close();
     expect(t1.status).toEqual("closed");
     expect(t2.status).toEqual("closed");
+  });
+
+  it("errors on close if the frame has errored", async () => {
+    let error = new Error("boom!");
+    let scope = createScope();
+    let bomb = scope.run(function* () {
+      throw error;
+    });
+    await expect(bomb).rejects.toEqual(error);
+    await expect(scope.close()).rejects.toEqual(error);
+  });
+
+  it("still closes open resources whenever something errors", async () => {
+    let error = new Error("boom!");
+    let scope = createScope();
+    let t = await scope.run(() => tester);
+    scope.run(function* () {
+      throw error;
+    });
+    await expect(scope.close()).rejects.toEqual(error);
+    expect(t.status).toEqual("closed");
   });
 });
 

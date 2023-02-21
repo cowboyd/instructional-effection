@@ -31,16 +31,17 @@ export interface Port<T, R> {
   close(value: R): Operation<void>;
 }
 
-export interface Channel<T, R> {
-  input: Port<T, R>;
-  output: Stream<T, R>;
+export interface Channel<T, TClose> {
+  input: Port<T, TClose>;
+  output: Stream<T, TClose>;
 }
+
+/* low-level interface Which you probably will not need */
 
 export type Result<T> =
   | { type: "resolved"; value: T }
   | { type: "rejected"; error: Error };
 
-/* low-level interface Which you probably will not need */
 
 export interface Instruction {
   (frame: Frame): Computation<Result<unknown>>;

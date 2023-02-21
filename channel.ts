@@ -1,57 +1,27 @@
-import type {
-  Channel,
-  Resolve,
-  Result,
-  Stream,
-  Subscription,
-} from "./types.ts";
-import { action, resource, suspend } from "./instructions.ts";
-import { shift } from "./deps.ts";
+import type { Channel, Operation, Resolve, Stream, Subscription } from "./types.ts";
+import { action, resource } from "./instructions.ts";
 
-export function createChannel<T, TClose>(): Channel<T, TClose> {
+export function createChannel<T, TClose = void>(): Channel<T, TClose> {
   let subscribers = new Set<ChannelSubscriber<T, TClose>>();
 
-  let output: Stream<T, TClose> = {
-    [Symbol.iterator]: () =>
-      resource<Subscription<T, TClose>>(function* (provide) {
-        let subscriber: ChannelSubscriber<T, TClose> = {
-          notify() {},
-        };
+  let output: Stream<T, TClose> = resource(function*(provide) {
+    let subscriber = yield* useSubscriber<T,TClose>();
+    subscribers.add(subscriber);
 
-        let subscription: Subscription<T, TClose> = {
-          [Symbol.iterator]: () =>
-            action<IteratorResult<T, TClose>>(function* (resolve) {
-              subscriber.notify = resolve;
-              yield* suspend();
-            })[Symbol.iterator](),
-        };
-        subscribers.add(subscriber);
-        try {
-          yield* provide(subscription);
-        } finally {
-          subscribers.delete(subscriber);
-        }
-      })[Symbol.iterator](),
-  };
+    try {
+      yield* provide(subscriber.subscription);
+    } finally {
+      subscribers.delete(subscriber);
+    }
+  })
 
-  let send = (item: IteratorResult<T, TClose>) => {
-    return {
-      *[Symbol.iterator]() {
-        yield () =>
-          shift<Result<void>>(function* (k) {
-            let result: Result<void> = { type: "resolved", value: void 0 };
-            for (let subscriber of subscribers) {
-              try {
-                subscriber.notify(item);
-              } catch (error) {
-                result = { type: "rejected", error };
-              }
-            }
-            k(result);
-          });
-      },
-    };
-  };
+  let send = (item: IteratorResult<T, TClose>) => ({
+    *[Symbol.iterator]() {
+      for (let subscriber of subscribers) {
+        subscriber.deliver(item);
+      }
+    }
+  })
 
   let input = {
     send: (value: T) => send({ done: false, value }),
@@ -62,5 +32,38 @@ export function createChannel<T, TClose>(): Channel<T, TClose> {
 }
 
 interface ChannelSubscriber<T, TClose> {
-  notify: Resolve<IteratorResult<T, TClose>>;
+  deliver(item: IteratorResult<T, TClose>): void;
+  subscription: Subscription<T,TClose>;
+}
+
+function useSubscriber<T,TClose>(): Operation<ChannelSubscriber<T,TClose>> {
+  type Item = IteratorResult<T,TClose>
+
+  return resource(function* Subscriber(provide) {
+    let items: Item[] = [];
+    let consumers: Resolve<Item>[] = [];
+
+    yield* provide({
+      deliver(item) {
+        items.unshift(item);
+        while (items.length > 0 && consumers.length > 0) {
+          let consume = consumers.pop() as Resolve<Item>;
+          let message = items.pop() as Item;
+          consume(message);
+        }
+      },
+      subscription: {
+        *[Symbol.iterator]() {
+          let message = items.pop();
+          if (message) {
+            return message;
+          } else {
+            return yield* action<Item>(function*(resolve) {
+              consumers.unshift(resolve);
+            });
+          }
+        }
+      }
+    });
+  });
 }

@@ -10,7 +10,15 @@ export function createScope(): Scope {
       let block = frame.run(operation);
       let future = futurize(function* () {
         let exhausted = yield* block;
-
+        if (
+          exhausted.exit.reason === "completed" &&
+          exhausted.exit.result.type === "rejected"
+        ) {
+          let teardown = yield* frame.crash(exhausted.exit.result.error);
+          if (teardown.type === "rejected") {
+            return teardown;
+          }
+        }
         return exhausted.exit.result;
       });
       let task = create("Task", {}, {
