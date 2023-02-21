@@ -17,7 +17,6 @@ export type Reject = (error: Error) => void;
 
 export type Provide<T> = (value: T) => Operation<void>;
 
-
 export interface Scope {
   run<T>(operation: Operation<T>): Task<T>;
   close(): Future<void>;
@@ -87,5 +86,4 @@ export interface Block<T = unknown> extends Computation<Exhausted<T>> {
   observe(): Observer<IterationEvent<T>>;
   enter(): void;
   abort(): Computation<Result<void>>;
-  toTask(): Task<T>;
 }
