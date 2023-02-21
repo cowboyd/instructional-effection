@@ -11,16 +11,18 @@ export interface NewFuture<T> {
   future: Future<T>;
 }
 
-export function futurize<T>(computation: () => Computation<Result<T>>): Future<T> {
+export function futurize<T>(
+  computation: () => Computation<Result<T>>,
+): Future<T> {
   let { future, resolve, reject } = createFuture<T>();
-  evaluate(function*() {
+  evaluate(function* () {
     let result = yield* computation();
     if (result.type === "resolved") {
       resolve(result.value);
     } else {
       reject(result.error);
     }
-  })
+  });
   return future;
 }
 

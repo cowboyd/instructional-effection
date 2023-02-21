@@ -37,9 +37,8 @@ export interface Channel<T, R> {
 }
 
 export type Result<T> =
-  | { type: "resolved", value: T }
-  | { type: "rejected", error: Error };
-
+  | { type: "resolved"; value: T }
+  | { type: "rejected"; error: Error };
 
 /* low-level interface Which you probably will not need */
 
@@ -68,7 +67,7 @@ export interface Exited<T> {
 
 export interface Exhausted<T> {
   type: "exhausted";
-  exit: Exited<T>
+  exit: Exited<T>;
   result: Result<void>;
 }
 

@@ -1,13 +1,17 @@
-import { describe, it, expect } from "./suite.ts";
-import { createScope, action, resource } from "../mod.ts";
+import { describe, expect, it } from "./suite.ts";
+import { action, createScope, resource } from "../mod.ts";
 
 describe("Scope", () => {
   it("can be used to run actions", async () => {
     let scope = createScope();
-    let t1 = scope.run(function*() { return 1; });
-    let t2 = scope.run(function*() { return 2; });
-    expect(await t1).toEqual(1)
-    expect(await t2).toEqual(2)
+    let t1 = scope.run(function* () {
+      return 1;
+    });
+    let t2 = scope.run(function* () {
+      return 2;
+    });
+    expect(await t1).toEqual(1);
+    expect(await t2).toEqual(2);
   });
 
   it("can be used to run bare resources", async () => {
@@ -26,7 +30,7 @@ interface Tester {
   status: "open" | "closed";
 }
 
-const tester = resource<Tester>(function*(provide) {
+const tester = resource<Tester>(function* (provide) {
   let t: Tester = { status: "open" };
   try {
     yield* provide(t);

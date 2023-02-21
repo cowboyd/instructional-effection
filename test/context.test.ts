@@ -1,14 +1,16 @@
-import { describe, it, expect } from "./suite.ts";
+import { describe, expect, it } from "./suite.ts";
 
-import { run, createContext } from "../mod.ts";
+import { createContext, run } from "../mod.ts";
 
-const numbers = createContext('numbers', [3]);
+const numbers = createContext("numbers", [3]);
 
 describe("context", () => {
   it("has the initial value available at all times", async () => {
-    expect(await run(function* () {
-      return yield* numbers;
-    })).toEqual([3]);
+    expect(
+      await run(function* () {
+        return yield* numbers;
+      }),
+    ).toEqual([3]);
   });
 
   // it.only("can be refined, but it restores ater evaluation", async () => {
@@ -38,4 +40,4 @@ describe("context", () => {
   //   expect(afterInner).toEqual([3,2])
   //   expect(after).toEqual([3])
   // })
-})
+});

@@ -8,14 +8,14 @@ export function createScope(): Scope {
   return create<Scope>("Scope", {}, {
     run(operation) {
       let block = frame.run(operation);
-      let future = futurize(function*() {
+      let future = futurize(function* () {
         let exhausted = yield* block;
 
         return exhausted.exit.result;
       });
       let task = create("Task", {}, {
         ...future,
-        halt: () => futurize(() => block.abort())
+        halt: () => futurize(() => block.abort()),
       });
 
       block.enter();
@@ -23,6 +23,6 @@ export function createScope(): Scope {
       return task;
     },
     close: () => futurize(() => frame.destroy()),
-    [Symbol.iterator]: () => futurize(() => frame)[Symbol.iterator]()
+    [Symbol.iterator]: () => futurize(() => frame)[Symbol.iterator](),
   });
 }

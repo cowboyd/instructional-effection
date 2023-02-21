@@ -1,4 +1,10 @@
-import type { Channel, Resolve, Result, Stream, Subscription } from "./types.ts";
+import type {
+  Channel,
+  Resolve,
+  Result,
+  Stream,
+  Subscription,
+} from "./types.ts";
 import { action, resource, suspend } from "./instructions.ts";
 import { shift } from "./deps.ts";
 
@@ -31,19 +37,20 @@ export function createChannel<T, TClose>(): Channel<T, TClose> {
   let send = (item: IteratorResult<T, TClose>) => {
     return {
       *[Symbol.iterator]() {
-        yield () => shift<Result<void>>(function*(k) {
-          let result: Result<void> = { type: "resolved", value: void 0 };
-          for (let subscriber of subscribers) {
-            try {
-              subscriber.notify(item);
-            } catch (error) {
-              result = { type: "rejected", error };
+        yield () =>
+          shift<Result<void>>(function* (k) {
+            let result: Result<void> = { type: "resolved", value: void 0 };
+            for (let subscriber of subscribers) {
+              try {
+                subscriber.notify(item);
+              } catch (error) {
+                result = { type: "rejected", error };
+              }
             }
-          }
-          k(result);
-        })
-      }
-    }
+            k(result);
+          });
+      },
+    };
   };
 
   let input = {

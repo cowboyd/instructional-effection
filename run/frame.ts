@@ -1,4 +1,4 @@
-import type { Block, Frame, Result, Resolve, Task } from "../types.ts";
+import type { Block, Frame, Resolve, Result, Task } from "../types.ts";
 
 import { futurize } from "../future.ts";
 import { evaluate, shift } from "../deps.ts";
@@ -8,7 +8,7 @@ import { createBlock } from "./block.ts";
 import { create } from "./create.ts";
 
 export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
-  let future = futurize(function*() {
+  let future = futurize(function* () {
     let result = yield* block;
     let teardown = yield* frame.destroy();
     if (teardown.type === "rejected") {
@@ -16,18 +16,19 @@ export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
     } else {
       return result.exit.result;
     }
-  })
+  });
   return {
     ...future,
-    halt: () => futurize(function*() {
-      let killblock = yield* block.abort();
-      let killframe = yield* frame.destroy();
-      if (killframe.type === "rejected") {
-        return killframe;
-      } else {
-        return killblock;
-      }
-    }),
+    halt: () =>
+      futurize(function* () {
+        let killblock = yield* block.abort();
+        let killframe = yield* frame.destroy();
+        if (killframe.type === "rejected") {
+          return killframe;
+        } else {
+          return killblock;
+        }
+      }),
   };
 }
 
@@ -39,8 +40,8 @@ export function createFrame(parent?: Frame): Frame {
   let context = Object.create(parent?.context ?? {});
   let observable = createObservable<Result<void>>();
 
-  let teardown = evaluate<Resolve<Result<void>>>(function*() {
-    let current = yield* shift<Result<void>>(function*(k) {
+  let teardown = evaluate<Resolve<Result<void>>>(function* () {
+    let current = yield* shift<Result<void>>(function* (k) {
       return k;
     });
 
@@ -61,7 +62,7 @@ export function createFrame(parent?: Frame): Frame {
     }
 
     observable.notify(result = current);
-  })
+  });
 
   function* close($result: Result<void>) {
     if (result) {
@@ -73,26 +74,26 @@ export function createFrame(parent?: Frame): Frame {
     return yield* frame;
   }
 
-  let frame: Frame = create<Frame>('Frame', {
+  let frame: Frame = create<Frame>("Frame", {
     id: ids++,
     context,
   }, {
     createChild() {
       let child = createFrame();
       children.add(child);
-      evaluate(function*() {
+      evaluate(function* () {
         yield* child;
         children.delete(child);
-      })
+      });
       return child;
     },
     run(operation) {
       let block = createBlock(frame, operation);
       running.add(block);
-      evaluate(function*() {
+      evaluate(function* () {
         yield* block;
         running.delete(block);
-      })
+      });
       return block;
     },
     *crash(error: Error) {
@@ -110,7 +111,7 @@ export function createFrame(parent?: Frame): Frame {
         observer.drop();
         return r;
       }
-    }
+    },
   });
 
   return frame;
