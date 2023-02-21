@@ -53,6 +53,7 @@ export interface Observer<TEvent> extends Computation<TEvent> {
 
 export interface Frame extends Computation<Result<void>> {
   id: number;
+  context: Record<string, unknown>;
   createChild(): Frame;
   run<T>(operation: () => Operation<T>): Block<T>;
   crash(error: Error): Computation<Result<void>>;

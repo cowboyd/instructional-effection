@@ -191,10 +191,11 @@ function reduce<T>(options: ReduceOptions<T>): Computation<Result<T>> {
 }
 
 let ids = 0;
-export function createFrame(): Frame {
+export function createFrame(parent?: Frame): Frame {
   let result: Result<void>;
   let children = new Set<Frame>();
   let running = new Set<Block>();
+  let context = Object.create(parent?.context ?? {});
   let observable = createObservable<Result<void>>();
 
   let teardown = evaluate<Resolve<Result<void>>>(function*() {
@@ -233,6 +234,7 @@ export function createFrame(): Frame {
 
   let frame: Frame = create<Frame>('Frame', {
     id: ids++,
+    context,
   }, {
     createChild() {
       let child = createFrame();
