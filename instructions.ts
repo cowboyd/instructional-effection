@@ -1,7 +1,7 @@
 import type { Operation, Reject, Resolve, Result, Provide, Task, Frame } from "./types.ts";
 
 import { evaluate, reset, shift } from "./deps.ts";
-import { createFrameTask } from "./run.ts";
+import { createFrameTask } from "./run/frame.ts";
 
 export function suspend(): Operation<void> {
   return {
