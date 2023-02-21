@@ -17,9 +17,6 @@ export type Reject = (error: Error) => void;
 
 export type Provide<T> = (value: T) => Operation<void>;
 
-export interface Instruction {
-  (frame: Frame): Computation<Result<unknown>>;
-}
 
 export interface Scope {
   run<T>(operation: Operation<T>): Task<T>;
@@ -45,7 +42,11 @@ export type Result<T> =
   | { type: "rejected", error: Error };
 
 
-/* low-level interfaces */
+/* low-level interface Which you probably will not need */
+
+export interface Instruction {
+  (frame: Frame): Computation<Result<unknown>>;
+}
 
 export interface Observer<TEvent> extends Computation<TEvent> {
   drop(): void;

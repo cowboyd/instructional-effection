@@ -1,19 +1,27 @@
-import type { Future } from "./types.ts";
+import type { Future, Result } from "./types.ts";
+import type { Computation } from "./deps.ts";
+
+import { evaluate } from "./deps.ts";
 import { action, suspend } from "./instructions.ts";
 import { lazy } from "./lazy.ts";
-
-export type Result<T = unknown> = {
-  type: "resolved";
-  value: T;
-} | {
-  type: "rejected";
-  error: Error;
-};
 
 export interface NewFuture<T> {
   resolve(value: T): void;
   reject(error: Error): void;
   future: Future<T>;
+}
+
+export function futurize<T>(computation: () => Computation<Result<T>>): Future<T> {
+  let { future, resolve, reject } = createFuture<T>();
+  evaluate(function*() {
+    let result = yield* computation();
+    if (result.type === "resolved") {
+      resolve(result.value);
+    } else {
+      reject(result.error);
+    }
+  })
+  return future;
 }
 
 export function createFuture<T>(): NewFuture<T> {

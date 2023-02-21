@@ -1,9 +1,8 @@
-import type { Block, Frame, Resolve, Exhausted, Instruction, IterationEvent, Exited, Future, Operation, Task } from "./types.ts";
+import type { Block, Frame, Result, Resolve, Exhausted, Instruction, IterationEvent, Exited, Future, Operation, Task } from "./types.ts";
 import type { Computation } from "./deps.ts";
-import type { Result } from "./future.ts";
 
+import { futurize } from "./future.ts";
 import { evaluate, reset, shift } from "./deps.ts";
-import { createFuture } from "./future.ts";
 import { createObservable } from "./observer.ts";
 import { lazy } from "./lazy.ts";
 
@@ -284,19 +283,6 @@ function create<T>(tag: string, attrs: Partial<T>, prototype: Partial<T>): T {
     ...prototype,
     [Symbol.toStringTag]: tag,
   }, properties);
-}
-
-function futurize<T>(computation: () => Computation<Result<T>>): Future<T> {
-  let { future, resolve, reject } = createFuture<T>();
-  evaluate(function*() {
-    let result = yield* computation();
-    if (result.type === "resolved") {
-      resolve(result.value);
-    } else {
-      reject(result.error);
-    }
-  })
-  return future;
 }
 
 // deno-lint-ignore no-explicit-any

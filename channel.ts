@@ -1,5 +1,4 @@
-import type { Channel, Resolve, Stream, Subscription } from "./types.ts";
-import type { Result } from "./future.ts";
+import type { Channel, Resolve, Result, Stream, Subscription } from "./types.ts";
 import { action, resource, suspend } from "./instructions.ts";
 import { shift } from "./deps.ts";
 
