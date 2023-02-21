@@ -17,8 +17,8 @@ export type Reject = (error: Error) => void;
 
 export type Provide<T> = (value: T) => Operation<void>;
 
-export interface Scope {
-  run<T>(operation: Operation<T>): Task<T>;
+export interface Scope extends Operation<void> {
+  run<T>(operation: () => Operation<T>): Task<T>;
   close(): Future<void>;
 }
 
