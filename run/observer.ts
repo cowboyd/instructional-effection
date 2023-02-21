@@ -1,6 +1,6 @@
-import type { Resolve, Observer } from "./types.ts";
+import type { Resolve, Observer } from "../types.ts";
 
-import { shift } from "./deps.ts";
+import { shift } from "../deps.ts";
 
 export function createObservable<T>()  {
   let observers = new Map<Observer<T>, Resolve<T>>();

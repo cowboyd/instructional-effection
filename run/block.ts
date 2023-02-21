@@ -1,7 +1,7 @@
 import type { Exhausted, Exited, Frame, Instruction, Operation, Block, Result, IterationEvent } from "../types.ts";
 import type { Computation } from "../deps.ts";
 
-import { createObservable } from "../observer.ts";
+import { createObservable } from "./observer.ts";
 import { evaluate, shift, reset } from "../deps.ts";
 import { lazy } from "../lazy.ts";
 import { create } from "./create.ts";

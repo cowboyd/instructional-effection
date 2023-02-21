@@ -3,7 +3,7 @@ import type { Block, Frame, Result, Resolve, Task } from "../types.ts";
 import { futurize } from "../future.ts";
 import { evaluate, shift } from "../deps.ts";
 
-import { createObservable } from "../observer.ts";
+import { createObservable } from "./observer.ts";
 import { createBlock } from "./block.ts";
 import { create } from "./create.ts";
 
