@@ -1,11 +1,11 @@
-import type { Channel, Operation, Resolve, Stream, Subscription } from "./types.ts";
+import type { Channel, Resolve, Stream, Subscription } from "./types.ts";
 import { action, resource } from "./instructions.ts";
 
 export function createChannel<T, TClose = void>(): Channel<T, TClose> {
   let subscribers = new Set<ChannelSubscriber<T, TClose>>();
 
-  let output: Stream<T, TClose> = resource(function*(provide) {
-    let subscriber = yield* useSubscriber<T,TClose>();
+  let output: Stream<T, TClose> = resource(function* Subscription(provide) {
+    let subscriber = createSubscriber<T,TClose>();
     subscribers.add(subscriber);
 
     try {
@@ -36,34 +36,32 @@ interface ChannelSubscriber<T, TClose> {
   subscription: Subscription<T,TClose>;
 }
 
-function useSubscriber<T,TClose>(): Operation<ChannelSubscriber<T,TClose>> {
+function createSubscriber<T,TClose>(): ChannelSubscriber<T,TClose> {
   type Item = IteratorResult<T,TClose>
 
-  return resource(function* Subscriber(provide) {
-    let items: Item[] = [];
-    let consumers: Resolve<Item>[] = [];
+  let items: Item[] = [];
+  let consumers: Resolve<Item>[] = [];
 
-    yield* provide({
-      deliver(item) {
-        items.unshift(item);
-        while (items.length > 0 && consumers.length > 0) {
-          let consume = consumers.pop() as Resolve<Item>;
-          let message = items.pop() as Item;
-          consume(message);
-        }
-      },
-      subscription: {
-        *[Symbol.iterator]() {
-          let message = items.pop();
-          if (message) {
-            return message;
-          } else {
-            return yield* action<Item>(function*(resolve) {
-              consumers.unshift(resolve);
-            });
-          }
+  return {
+    deliver(item) {
+      items.unshift(item);
+      while (items.length > 0 && consumers.length > 0) {
+        let consume = consumers.pop() as Resolve<Item>;
+        let message = items.pop() as Item;
+        consume(message);
+      }
+    },
+    subscription: {
+      *[Symbol.iterator]() {
+        let message = items.pop();
+        if (message) {
+          return message;
+        } else {
+          return yield* action<Item>(function*(resolve) {
+            consumers.unshift(resolve);
+          });
         }
       }
-    });
-  });
+    }
+  };
 }
