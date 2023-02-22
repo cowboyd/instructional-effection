@@ -5,7 +5,7 @@ export function createChannel<T, TClose = void>(): Channel<T, TClose> {
   let subscribers = new Set<ChannelSubscriber<T, TClose>>();
 
   let output: Stream<T, TClose> = resource(function* Subscription(provide) {
-    let subscriber = createSubscriber<T,TClose>();
+    let subscriber = createSubscriber<T, TClose>();
     subscribers.add(subscriber);
 
     try {
@@ -13,15 +13,15 @@ export function createChannel<T, TClose = void>(): Channel<T, TClose> {
     } finally {
       subscribers.delete(subscriber);
     }
-  })
+  });
 
   let send = (item: IteratorResult<T, TClose>) => ({
     *[Symbol.iterator]() {
       for (let subscriber of subscribers) {
         subscriber.deliver(item);
       }
-    }
-  })
+    },
+  });
 
   let input = {
     send: (value: T) => send({ done: false, value }),
@@ -33,11 +33,11 @@ export function createChannel<T, TClose = void>(): Channel<T, TClose> {
 
 interface ChannelSubscriber<T, TClose> {
   deliver(item: IteratorResult<T, TClose>): void;
-  subscription: Subscription<T,TClose>;
+  subscription: Subscription<T, TClose>;
 }
 
-function createSubscriber<T,TClose>(): ChannelSubscriber<T,TClose> {
-  type Item = IteratorResult<T,TClose>
+function createSubscriber<T, TClose>(): ChannelSubscriber<T, TClose> {
+  type Item = IteratorResult<T, TClose>;
 
   let items: Item[] = [];
   let consumers: Resolve<Item>[] = [];
@@ -57,11 +57,11 @@ function createSubscriber<T,TClose>(): ChannelSubscriber<T,TClose> {
         if (message) {
           return message;
         } else {
-          return yield* action<Item>(function*(resolve) {
+          return yield* action<Item>(function* (resolve) {
             consumers.unshift(resolve);
           });
         }
-      }
-    }
+      },
+    },
   };
 }

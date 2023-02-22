@@ -6,7 +6,7 @@ import {
   it as $it,
 } from "./suite.ts";
 
-import type { Port, Stream, Operation } from "../mod.ts";
+import type { Operation, Port, Stream } from "../mod.ts";
 import { createChannel, createScope, sleep, spawn } from "../mod.ts";
 
 let scope = createScope();

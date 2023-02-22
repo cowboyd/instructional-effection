@@ -42,7 +42,6 @@ export type Result<T> =
   | { type: "resolved"; value: T }
   | { type: "rejected"; error: Error };
 
-
 export interface Instruction {
   (frame: Frame): Computation<Result<unknown>>;
 }
