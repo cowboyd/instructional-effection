@@ -45,7 +45,7 @@ describe("run()", () => {
       try {
         yield* $expect(Promise.reject(error));
         two = 9;
-      } catch (e) {
+      } catch (_) {
         // swallow error and yield in catch block
         two = yield* $expect(Promise.resolve(8));
       }
@@ -138,7 +138,10 @@ describe("run()", () => {
       }
     });
 
-    expect(task.halt()).rejects.toHaveProperty("message", "illegal suspend");
+    await expect(task.halt()).rejects.toHaveProperty(
+      "message",
+      "illegal suspend",
+    );
   });
 
   it("can suspend in yielded finally block", async () => {
