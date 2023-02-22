@@ -4,8 +4,8 @@ import { expect as $expect, run, sleep, spawn, suspend } from "../mod.ts";
 describe("run()", () => {
   it("can compose multiple promises via generator", async () => {
     let result = await run(function* () {
-      let one: number = yield* $expect(Promise.resolve(12));
-      let two: number = yield* $expect(Promise.resolve(55));
+      let one = yield* $expect(Promise.resolve(12));
+      let two = yield* $expect(Promise.resolve(55));
       return one + two;
     });
     expect(result).toEqual(67);
@@ -13,8 +13,8 @@ describe("run()", () => {
 
   it("can compose operations", async () => {
     let result = await run(function* () {
-      let one: number = yield* createNumber(12);
-      let two: number = yield* createNumber(55);
+      let one = yield* createNumber(12);
+      let two = yield* createNumber(55);
       return one + two;
     });
     expect(result).toEqual(67);
@@ -23,8 +23,8 @@ describe("run()", () => {
   it("rejects generator if subtask promise fails", async () => {
     let error = new Error("boom");
     let task = run(function* () {
-      let one: number = yield* createNumber(12);
-      let two: number = yield* blowUp<number>();
+      let one = yield* createNumber(12);
+      let two = yield* blowUp<number>();
       return one + two;
     });
     await expect(task).rejects.toEqual(error);
@@ -41,7 +41,7 @@ describe("run()", () => {
     let error = new Error("boom");
     let task = run(function* () {
       let one = yield* $expect(Promise.resolve(12));
-      let two: number;
+      let two;
       try {
         yield* $expect(Promise.reject(error));
         two = 9;
@@ -58,7 +58,7 @@ describe("run()", () => {
   it("can recover from errors in operation", async () => {
     let task = run(function* () {
       let one = yield* $expect(Promise.resolve(12));
-      let two: number;
+      let two;
       try {
         yield* blowUp();
         two = 9;
