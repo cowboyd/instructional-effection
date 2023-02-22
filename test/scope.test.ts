@@ -1,5 +1,5 @@
 import { describe, expect, it } from "./suite.ts";
-import { createScope, resource } from "../mod.ts";
+import { action, createScope, resource, run, useScope } from "../mod.ts";
 
 describe("Scope", () => {
   it("can be used to run actions", async () => {
@@ -43,6 +43,18 @@ describe("Scope", () => {
       throw error;
     });
     await expect(scope.close()).rejects.toEqual(error);
+    expect(t.status).toEqual("closed");
+  });
+
+  it("let's you capture scope from an operation", async () => {
+    let t = await run(function* () {
+      let scope = yield* useScope();
+      let t = yield* action<Tester>(function* (resolve) {
+        resolve(yield* scope.run(() => tester));
+      });
+      expect(t.status).toEqual("open");
+      return t;
+    });
     expect(t.status).toEqual("closed");
   });
 });

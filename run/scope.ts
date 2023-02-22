@@ -1,10 +1,15 @@
-import type { Scope } from "../types.ts";
+import type { Operation, Scope } from "../types.ts";
 import { createFrame } from "./frame.ts";
 import { create } from "./create.ts";
 import { futurize } from "../future.ts";
+import { getframe } from "../instructions.ts";
 
-export function createScope(): Scope {
-  let frame = createFrame();
+export function* useScope(): Operation<Scope> {
+  let frame = yield* getframe();
+  return createScope(frame);
+}
+
+export function createScope(frame = createFrame()): Scope {
   return create<Scope>("Scope", {}, {
     run(operation) {
       let block = frame.run(operation);
