@@ -13,8 +13,10 @@ export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
     let teardown = yield* frame.destroy();
     if (teardown.type === "rejected") {
       return teardown;
+    } else if (result.type === "aborted") {
+      return { type: "rejected", error: new Error("halted") };
     } else {
-      return result.exit.result;
+      return result;
     }
   });
   return {
@@ -38,7 +40,7 @@ export function createFrame(parent?: Frame): Frame {
   let children = new Set<Frame>();
   let running = new Set<Block>();
   let context = Object.create(parent?.context ?? {});
-  let observable = createObservable<Result<void>>();
+  let results = createObservable<Result<void>>();
 
   let teardown = evaluate<Resolve<Result<void>>>(function* () {
     let current = yield* shift<Result<void>>(function* (k) {
@@ -61,7 +63,7 @@ export function createFrame(parent?: Frame): Frame {
       }
     }
 
-    observable.notify(result = current);
+    results.notify(result = current);
   });
 
   function* close($result: Result<void>) {
@@ -79,7 +81,7 @@ export function createFrame(parent?: Frame): Frame {
     context,
   }, {
     createChild() {
-      let child = createFrame();
+      let child = createFrame(frame);
       children.add(child);
       evaluate(function* () {
         yield* child;
@@ -106,10 +108,7 @@ export function createFrame(parent?: Frame): Frame {
       if (result) {
         return result;
       } else {
-        let observer = observable.observe();
-        let r = yield* observer;
-        observer.drop();
-        return r;
+        return yield* results.first();
       }
     },
   });

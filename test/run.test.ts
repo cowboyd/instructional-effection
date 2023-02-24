@@ -129,19 +129,19 @@ describe("run()", () => {
     expect(completed).toEqual(true);
   });
 
-  it.ignore("cannot explicitly suspend in a finally block", async () => {
+  it("cannot explicitly suspend in a finally block", async () => {
+    let done = false;
     let task = run(function* () {
       try {
         yield* suspend();
       } finally {
         yield* suspend();
+        done = true;
       }
     });
 
-    await expect(task.halt()).rejects.toHaveProperty(
-      "message",
-      "illegal suspend",
-    );
+    await task.halt();
+    expect(done).toEqual(true);
   });
 
   it("can suspend in yielded finally block", async () => {
@@ -170,8 +170,8 @@ describe("run()", () => {
   });
 
   it("can be halted while in the generator", async () => {
-    let task = run(function* () {
-      yield* spawn(function* () {
+    let task = run(function* Main() {
+      yield* spawn(function* Boomer() {
         yield* sleep(2);
         throw new Error("boom");
       });
@@ -191,7 +191,7 @@ describe("run()", () => {
     await expect(task).rejects.toHaveProperty("message", "halted");
   });
 
-  it.ignore("can halt itself between yield points", async () => {
+  it("can halt itself between yield points", async () => {
     let task = run(function* () {
       yield* sleep(1);
 
@@ -227,8 +227,8 @@ describe("run()", () => {
   });
 
   it("can throw error when child blows up", async () => {
-    let task = run(function* () {
-      yield* spawn(function* willBoom() {
+    let task = run(function* Main() {
+      yield* spawn(function* Boomer() {
         yield* sleep(5);
         throw new Error("boom");
       });
