@@ -43,7 +43,7 @@ export type Result<T> =
   | { type: "rejected"; error: Error };
 
 export interface Instruction {
-  (frame: Frame): Computation<Result<unknown>>;
+  (frame: Frame, signal: AbortSignal): Computation<Result<unknown>>;
 }
 
 export interface Observer<TEvent> extends Computation<TEvent> {
@@ -59,30 +59,13 @@ export interface Frame extends Computation<Result<void>> {
   destroy(): Computation<Result<void>>;
 }
 
-export interface Exited<T> {
-  type: "exited";
-  reason: "terminated" | "completed";
-  result: Result<T>;
-}
-
-export interface Exhausted<T> {
-  type: "exhausted";
-  exit: Exited<T>;
+export type BlockResult<T> = Result<T> | {
+  type: "aborted";
   result: Result<void>;
-}
+};
 
-export interface InstructionEvent {
-  type: "instruction";
-  instruction: Instruction;
-}
-
-export type IterationEvent<T> =
-  | Exited<T>
-  | Exhausted<T>
-  | InstructionEvent;
-
-export interface Block<T = unknown> extends Computation<Exhausted<T>> {
-  observe(): Observer<IterationEvent<T>>;
+export interface Block<T = unknown> extends Computation<BlockResult<T>> {
+  name: string;
   enter(): void;
   abort(): Computation<Result<void>>;
 }

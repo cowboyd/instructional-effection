@@ -14,17 +14,22 @@ export function createScope(frame = createFrame()): Scope {
     run(operation) {
       let block = frame.run(operation);
       let future = futurize(function* () {
-        let exhausted = yield* block;
-        if (
-          exhausted.exit.reason === "completed" &&
-          exhausted.exit.result.type === "rejected"
-        ) {
-          let teardown = yield* frame.crash(exhausted.exit.result.error);
+        let result = yield* block;
+        if (result.type === "rejected") {
+          let teardown = yield* frame.crash(result.error);
           if (teardown.type === "rejected") {
             return teardown;
+          } else {
+            return result;
+          }
+        } else if (result.type === "aborted") {
+          if (result.result.type === "rejected") {
+            return result.result;
+          } else {
+            return { type: "rejected", error: new Error("halted") };
           }
         }
-        return exhausted.exit.result;
+        return result;
       });
       let task = create("Task", {}, {
         ...future,

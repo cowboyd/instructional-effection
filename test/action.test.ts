@@ -107,4 +107,16 @@ describe("action", () => {
     );
     await expect(task).rejects.toEqual(error);
   });
+
+  it("does not reach code that should be aborted", async () => {
+    let didReach = false;
+    await run(function Main() {
+      return action<number>(function* MyAction(resolve) {
+        resolve(10);
+        yield* suspend();
+        didReach = true;
+      });
+    });
+    expect(didReach).toEqual(false);
+  });
 });

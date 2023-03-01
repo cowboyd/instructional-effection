@@ -1,9 +1,9 @@
-import type { Block, Frame, Resolve, Result, Task } from "../types.ts";
+import type { Block, Frame, Result, Task } from "../types.ts";
 
 import { futurize } from "../future.ts";
-import { evaluate, shift } from "../deps.ts";
+import { evaluate } from "../deps.ts";
 
-import { createObservable } from "./observer.ts";
+import { createEventStream } from "./event-stream.ts";
 import { createBlock } from "./block.ts";
 import { create } from "./create.ts";
 
@@ -13,8 +13,10 @@ export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
     let teardown = yield* frame.destroy();
     if (teardown.type === "rejected") {
       return teardown;
+    } else if (result.type === "aborted") {
+      return { type: "rejected", error: new Error("halted") };
     } else {
-      return result.exit.result;
+      return result;
     }
   });
   return {
@@ -34,17 +36,15 @@ export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
 
 let ids = 0;
 export function createFrame(parent?: Frame): Frame {
-  let result: Result<void>;
   let children = new Set<Frame>();
   let running = new Set<Block>();
   let context = Object.create(parent?.context ?? {});
-  let observable = createObservable<Result<void>>();
+  let results = createEventStream<void, Result<void>>();
 
-  let teardown = evaluate<Resolve<Result<void>>>(function* () {
-    let current = yield* shift<Result<void>>(function* (k) {
-      return k;
-    });
+  let teardown = createEventStream<void, Result<void>>();
 
+  evaluate(function* () {
+    let current = yield* teardown;
     for (let block of running) {
       let teardown = yield* block.abort();
       if (teardown.type !== "resolved") {
@@ -61,25 +61,15 @@ export function createFrame(parent?: Frame): Frame {
       }
     }
 
-    observable.notify(result = current);
+    results.close(current);
   });
-
-  function* close($result: Result<void>) {
-    if (result) {
-      return result;
-    }
-
-    teardown($result);
-
-    return yield* frame;
-  }
 
   let frame: Frame = create<Frame>("Frame", {
     id: ids++,
     context,
   }, {
     createChild() {
-      let child = createFrame();
+      let child = createFrame(frame);
       children.add(child);
       evaluate(function* () {
         yield* child;
@@ -97,20 +87,15 @@ export function createFrame(parent?: Frame): Frame {
       return block;
     },
     *crash(error: Error) {
-      return yield* close({ type: "rejected", error });
+      teardown.close({ type: "rejected", error });
+      return yield* frame;
     },
     *destroy() {
-      return yield* close({ type: "resolved", value: void 0 });
+      teardown.close({ type: "resolved", value: void 0 });
+      return yield* frame;
     },
     *[Symbol.iterator]() {
-      if (result) {
-        return result;
-      } else {
-        let observer = observable.observe();
-        let r = yield* observer;
-        observer.drop();
-        return r;
-      }
+      return yield* results;
     },
   });
 
