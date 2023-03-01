@@ -10,7 +10,7 @@ import type {
 
 import { reset, shift } from "./deps.ts";
 import { createFrameTask } from "./run/frame.ts";
-import { createObservable } from "./run/observer.ts";
+import { createEventStream } from "./run/event-stream.ts";
 
 export function suspend(): Operation<void> {
   return {
@@ -33,18 +33,18 @@ export function action<T>(
     *[Symbol.iterator]() {
       return yield function Action(frame) {
         return shift<Result<T>>(function* (k) {
-          let results = createObservable<Result<T>>();
+          let results = createEventStream<void, Result<T>>();
 
           let resolve: Resolve<T> = (value) =>
-            results.notify({ type: "resolved", value });
+            results.close({ type: "resolved", value });
           let reject: Reject = (error) =>
-            results.notify({ type: "rejected", error });
+            results.close({ type: "rejected", error });
 
           let child = frame.createChild();
           let block = child.run(() => operation(resolve, reject));
 
           yield* reset(function* () {
-            let result = yield* results.first();
+            let result = yield* results;
             let destruction = yield* child.destroy();
             if (destruction.type === "rejected") {
               k(destruction);
@@ -56,7 +56,7 @@ export function action<T>(
           yield* reset(function* () {
             let result = yield* block;
             if (result.type === "rejected") {
-              results.notify(result);
+              results.close(result);
             }
           });
 
