@@ -25,12 +25,12 @@ export function createObservable<T>() {
       let consumers: Resolve<T>[] = [];
       let observer = {
         *[Symbol.iterator]() {
-          let event = events.pop();
+          let event = events.shift();
           if (event) {
             return event;
           } else {
             return yield* shift<T>(function* (k) {
-              consumers.unshift(k);
+              consumers.push(k);
             });
           }
         },
@@ -39,10 +39,10 @@ export function createObservable<T>() {
         },
       };
       observers.set(observer, (event: T) => {
-        events.unshift(event);
+        events.push(event);
         while (events.length > 0 && consumers.length > 0) {
-          let consume = consumers.pop() as Resolve<T>;
-          let event = events.pop() as T;
+          let consume = consumers.shift() as Resolve<T>;
+          let event = events.shift() as T;
           consume(event);
         }
       });
