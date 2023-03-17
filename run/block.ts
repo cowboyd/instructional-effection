@@ -33,7 +33,7 @@ export function createBlock<T>(
 
   let enter = evaluate<() => void>(function* () {
     yield* shift<void>(function* (k) {
-      return k;
+      return k.tail;
     });
 
     yield* reset(function* () {
@@ -61,13 +61,16 @@ export function createBlock<T>(
         let outcome = yield* shift<InstructionResult>(function* (k) {
           yield* reset(function* () {
             yield* interrupt;
-            k({ type: "interrupted" });
+            k.tail({ type: "interrupted" });
           });
 
           try {
-            k({ type: "settled", result: yield* instruction(frame, signal) });
+            k.tail({
+              type: "settled",
+              result: yield* instruction(frame, signal),
+            });
           } catch (error) {
-            k({ type: "settled", result: { type: "rejected", error } });
+            k.tail({ type: "settled", result: { type: "rejected", error } });
           }
         });
 
@@ -102,9 +105,9 @@ export function createBlock<T>(
         yield* reset(function* () {
           let result = yield* block;
           if (result.type === "aborted") {
-            k(result.result);
+            k.tail(result.result);
           } else {
-            k(result as Result<void>);
+            k.tail(result as Result<void>);
           }
         });
         controller.abort();
