@@ -18,7 +18,7 @@ export function suspend(): Operation<void> {
       return yield function Suspend(_, signal) {
         return shift<Result<void>>(function* (k) {
           if (signal.aborted) {
-            k({ type: "resolved", value: void 0 });
+            k.tail({ type: "resolved", value: void 0 });
           }
         });
       };
@@ -47,9 +47,9 @@ export function action<T>(
             let result = yield* results;
             let destruction = yield* child.destroy();
             if (destruction.type === "rejected") {
-              k(destruction);
+              k.tail(destruction);
             } else {
-              k(result);
+              k.tail(result);
             }
           });
 
@@ -93,7 +93,7 @@ export function spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
 
           block.enter();
 
-          k({ type: "resolved", value: task });
+          k.tail({ type: "resolved", value: task });
         });
       };
     },
@@ -113,7 +113,7 @@ export function resource<T>(
               *[Symbol.iterator]() {
                 return yield () =>
                   shift<Result<void>>(function* () {
-                    k({ type: "resolved", value });
+                    k.tail({ type: "resolved", value });
                   });
               },
             };
@@ -129,9 +129,9 @@ export function resource<T>(
           yield* reset(function* () {
             let done = yield* block;
             if (done.type === "rejected") {
-              k(done);
+              k.tail(done);
             } else if (done.type === "resolved") {
-              k({
+              k.tail({
                 type: "rejected",
                 error: new Error(
                   `resource exited without ever providing anything`,
@@ -152,7 +152,7 @@ export function getframe(): Operation<Frame> {
     *[Symbol.iterator]() {
       return yield (frame) =>
         shift<Result<Frame>>(function* (k) {
-          k({ type: "resolved", value: frame });
+          k.tail({ type: "resolved", value: frame });
         });
     },
   };
