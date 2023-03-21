@@ -16,6 +16,31 @@ describe("Channel", () => {
   });
   $afterEach(() => scope.close());
 
+  it("does not use the same event twice when serially subscribed to a channel", function* () {
+    let { input, output } = createChannel<string, void>();
+    let actual: string[] = [];
+    function* channel() {
+      yield* sleep(10);
+      yield* input.send("one");
+      yield* input.send("two");
+    }
+
+    function* root() {
+      yield* spawn(channel);
+
+      let subscription = yield* output;
+      let result = yield* subscription;
+      actual.push(result.value as string);
+
+      subscription = yield* output;
+      result = yield* subscription;
+      actual.push(result.value as string);
+    }
+
+    yield* root();
+    expect(actual).toEqual(["one", "two"]);
+  });
+
   describe("subscribe", () => {
     let input: Port<string, void>;
     let output: Stream<string, void>;
