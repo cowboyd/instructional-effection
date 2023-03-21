@@ -17,7 +17,7 @@ export function createChannel<T, TClose = void>(): Channel<T, TClose> {
 
   let send = (item: IteratorResult<T, TClose>) => ({
     *[Symbol.iterator]() {
-      for (let subscriber of subscribers) {
+      for (let subscriber of [...subscribers]) {
         subscriber.deliver(item);
       }
     },
