@@ -75,6 +75,30 @@ describe("spawn", () => {
     await expect(child).rejects.toEqual(error);
   });
 
+  it("resolves parent when child error is caught", async () => {
+    let child;
+    let error = new Error("moo");
+    let root = run(function* () {
+      try {
+        yield* {
+          *[Symbol.iterator]() {
+            child = yield* spawn(function* () {
+              yield* sleep(1);
+              throw error;
+            });
+          },
+        };
+      } catch (_err) {
+        return "success";
+      }
+
+      yield* suspend();
+    });
+
+    await expect(root).resolves.toEqual("success");
+    await expect(child).rejects.toEqual(error);
+  });
+
   it("finishes normally when child halts", async () => {
     let child;
     let root = run(function* () {
