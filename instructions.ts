@@ -67,6 +67,44 @@ export function action<T>(
   };
 }
 
+export function go<T>(
+  operation: () => Operation<T>,
+): Operation<Task<Result<T>>> {
+  function Go(frame: Frame) {
+    return shift<Result<Task<Result<T>>>>(function* (k) {
+      let child = frame.createChild();
+      let block = child.run(function* () {
+        try {
+          let value = yield* operation();
+          let result: Result<T> = {
+            type: "resolved",
+            value,
+          };
+          return result;
+        } catch (error) {
+          let result: Result<T> = {
+            type: "rejected",
+            error,
+          };
+          return result;
+        }
+      });
+
+      let task = createFrameTask(child, block);
+
+      block.enter();
+
+      k.tail({ type: "resolved", value: task });
+    });
+  }
+
+  return {
+    *[Symbol.iterator]() {
+      return yield Go;
+    },
+  };
+}
+
 export function spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
   return {
     *[Symbol.iterator]() {
@@ -83,7 +121,8 @@ export function spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
             if (destruction.type === "rejected") {
               yield* frame.crash(destruction.error);
             } else if (
-              result.type === "aborted" && result.result.type === "rejected"
+              result.type === "aborted" &&
+              result.result.type === "rejected"
             ) {
               yield* frame.crash(result.result.error);
             } else if (result.type === "rejected") {
