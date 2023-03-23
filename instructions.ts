@@ -10,7 +10,6 @@ import type {
 
 import { reset, shift } from "./deps.ts";
 import { createFrameTask } from "./run/frame.ts";
-import { createEventStream } from "./run/event-stream.ts";
 
 export function suspend(): Operation<void> {
   return {
@@ -33,19 +32,13 @@ export function action<T>(
     *[Symbol.iterator]() {
       return yield function Action(frame) {
         return shift<Result<T>>(function* (k) {
-          let results = createEventStream<void, Result<T>>();
+          let settle = yield* reset<Resolve<Result<T>>>(function* () {
+            let result = yield* shift<Result<T>>(function* (k) {
+              return k.tail;
+            });
 
-          let resolve: Resolve<T> = (value) =>
-            results.close({ type: "resolved", value });
-          let reject: Reject = (error) =>
-            results.close({ type: "rejected", error });
-
-          let child = frame.createChild();
-          let block = child.run(() => operation(resolve, reject));
-
-          yield* reset(function* () {
-            let result = yield* results;
             let destruction = yield* child.destroy();
+
             if (destruction.type === "rejected") {
               k.tail(destruction);
             } else {
@@ -53,10 +46,24 @@ export function action<T>(
             }
           });
 
+          let resolve: Resolve<T> = (value) =>
+            settle({ type: "resolved", value });
+          let reject: Reject = (error) => settle({ type: "rejected", error });
+
+          let child = frame.createChild();
+          let block = child.run(() => operation(resolve, reject));
+
+          yield* reset(function* () {
+            let result = yield* child;
+            if (result.type === "rejected") {
+              k.tail(result);
+            }
+          });
+
           yield* reset(function* () {
             let result = yield* block;
             if (result.type === "rejected") {
-              results.close(result);
+              settle(result);
             }
           });
 

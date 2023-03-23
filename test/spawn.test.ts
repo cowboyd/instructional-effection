@@ -1,5 +1,12 @@
 import { describe, expect, it } from "./suite.ts";
-import { expect as $expect, run, sleep, spawn, suspend } from "../mod.ts";
+import {
+  action,
+  expect as $expect,
+  run,
+  sleep,
+  spawn,
+  suspend,
+} from "../mod.ts";
 
 describe("spawn", () => {
   it("can spawn a new child task", async () => {
@@ -175,6 +182,24 @@ describe("spawn", () => {
       "first start",
       "first done",
     ]);
+  });
+
+  it("can catch an error spawned inside of an action", async () => {
+    let error = new Error("boom!");
+    let value = await run(function* () {
+      try {
+        yield* action(function* TheAction() {
+          yield* spawn(function* TheBomb() {
+            yield* sleep(1);
+            throw error;
+          });
+          yield* sleep(5000);
+        });
+      } catch (err) {
+        return err;
+      }
+    });
+    expect(value).toBe(error);
   });
 
   it("halts children on explicit halt", async () => {
