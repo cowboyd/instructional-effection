@@ -43,9 +43,19 @@ export function action<T>(
           let child = frame.createChild();
           let block = child.run(() => operation(resolve, reject));
 
+          yield* reset(function*() {
+            let result = yield* child;
+            if (result.type === "rejected") {
+              // results.close(result);
+              k.tail(result);
+            }
+          });
+
           yield* reset(function* () {
             let result = yield* results;
+            console.dir({ destroyAndReturn: operation.name, frame: child, action: result });
             let destruction = yield* child.destroy();
+            console.dir({ destroyed: operation.name, frame: child, action: result });
             if (destruction.type === "rejected") {
               k.tail(destruction);
             } else {
@@ -55,6 +65,7 @@ export function action<T>(
 
           yield* reset(function* () {
             let result = yield* block;
+            console.dir({ frame: child, block: result });
             if (result.type === "rejected") {
               results.close(result);
             }
@@ -71,8 +82,10 @@ export function spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
   return {
     *[Symbol.iterator]() {
       return yield function Spawn(frame) {
+        console.dir({ spawn: frame });
         return shift<Result<Task<T>>>(function* (k) {
           let child = frame.createChild();
+          console.dir({ spawned: child });
           let block = child.run(operation);
 
           let task = createFrameTask(child, block);
