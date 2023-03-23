@@ -63,6 +63,7 @@ export function createEventStream<T, TClose = void>(): EventStream<T, TClose> {
     },
     close(value: TClose) {
       if (state.type === "open") {
+        state = { type: "closing", value };
         notify({ done: true, value });
         state = { type: "closed", value };
       }
@@ -99,10 +100,10 @@ export function createEventStream<T, TClose = void>(): EventStream<T, TClose> {
       return observer;
     },
     *[Symbol.iterator]() {
-      if (state.type === "closed") {
-        return state.value;
-      } else {
+      if (state.type === "open") {
         return yield* forEach(stream);
+      } else {
+        return state.value;
       }
     },
   };

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "./suite.ts";
-import { expect as $expect, action, run, sleep, spawn, suspend } from "../mod.ts";
+import {
+  action,
+  expect as $expect,
+  run,
+  sleep,
+  spawn,
+  suspend,
+} from "../mod.ts";
 
 describe("spawn", () => {
   it("can spawn a new child task", async () => {
@@ -126,7 +133,7 @@ describe("spawn", () => {
     await expect(root.halt()).rejects.toHaveProperty("message", "moo");
   });
 
-  it("halts when child finishes during asynchronous halt", async () => {
+  it.only("halts when child finishes during asynchronous halt", async () => {
     let didFinish = false;
     let root = run(function* () {
       yield* spawn(function* () {
@@ -177,19 +184,18 @@ describe("spawn", () => {
     ]);
   });
 
-  it.only("blah blah", async() => {
-    let error = new Error('boom!');
-    let value = await run(function*() {
+  it("error in spawn in an action should be caught by parent", async () => {
+    let error = new Error("boom!");
+    let value = await run(function* () {
       try {
         yield* action(function* Bomb() {
-          yield* spawn(function*() {
-            yield* sleep(2000);
+          yield* spawn(function* () {
+            yield* sleep(1);
             throw error;
           });
           yield* sleep(5000);
         });
       } catch (err) {
-        console.dir({ err });
         return err;
       }
     });
