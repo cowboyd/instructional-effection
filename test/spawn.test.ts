@@ -99,6 +99,28 @@ describe("spawn", () => {
     await expect(child).rejects.toEqual(error);
   });
 
+  it("nested spawn - resolves parent when child error is caught", async () => {
+    let child;
+    let error = new Error("moo");
+    let root = run(function* () {
+      try {
+        const wait = yield* spawn(function* () {
+          child = yield* spawn(function* () {
+            yield* sleep(1);
+            throw error;
+          });
+          yield* child;
+        });
+        yield* wait;
+      } catch (_err) {
+        return "success";
+      }
+    });
+
+    await expect(root).resolves.toEqual("success");
+    await expect(child).rejects.toEqual(error);
+  });
+
   it("finishes normally when child halts", async () => {
     let child;
     let root = run(function* () {
