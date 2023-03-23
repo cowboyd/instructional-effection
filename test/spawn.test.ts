@@ -75,6 +75,7 @@ describe("spawn", () => {
     await expect(child).rejects.toEqual(error);
   });
 
+  // fails
   it("resolves parent when child error is caught", async () => {
     let child;
     let error = new Error("moo");
@@ -99,6 +100,7 @@ describe("spawn", () => {
     await expect(child).rejects.toEqual(error);
   });
 
+  // passes
   it("nested spawn - resolves parent when child error is caught", async () => {
     let child;
     let error = new Error("moo");
