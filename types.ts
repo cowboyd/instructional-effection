@@ -46,10 +46,6 @@ export interface Instruction {
   (frame: Frame, signal: AbortSignal): Computation<Result<unknown>>;
 }
 
-export interface Observer<TEvent> extends Computation<TEvent> {
-  drop(): void;
-}
-
 export interface Frame extends Computation<Result<void>> {
   id: number;
   context: Record<string, unknown>;
