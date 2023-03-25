@@ -3,5 +3,12 @@
     "rules": {
       "exclude": ["prefer-const", "require-yield"]
     }
+  },
+  "compilerOptions": {
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
+    ]
   }
 }
