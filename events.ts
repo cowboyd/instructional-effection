@@ -4,7 +4,8 @@ import { createChannel } from "./channel.ts";
 import { useScope } from "./run/scope.ts";
 
 
-type EventMap<T extends EventTarget> = T extends WebSocket ? WebSocketEventMap
+type EventMap<T extends EventTarget> =
+  T extends WebSocket ? WebSocketEventMap
   : T extends MediaQueryList
   ? MediaQueryListEventMap
   : T extends Document
@@ -16,9 +17,37 @@ type EventMap<T extends EventTarget> = T extends WebSocket ? WebSocketEventMap
 type EventTypes<T extends EventTarget> = keyof EventMap<T> & string;
 type EventValue<T extends EventTarget, K extends EventTypes<T>> = Extract<EventMap<T>[K], Event>;
 
-type O = EventValue<HTMLButtonElement, 'click'>; // MouseEvent
+type FN = (...any: any[]) => any;
 
-export function once<T extends EventTarget, K extends EventTypes<T>>(target: T, name: K): Operation<EventValue<T, K>> {
+type EventTypeFromListener<T extends FN> = T extends (
+  this: any,
+  event: infer U
+) => any
+  ? U extends Event
+  ? U
+  : Event
+  : Event;
+
+type EventTypeFromEventTarget<
+  T extends EventTarget,
+  K extends string
+> = T extends unknown
+  ? `on${K}` extends keyof T
+  ? EventTypeFromListener<
+    Extract<T[`on${K}`], FN>
+  >
+  : Event
+  : never;
+
+type EventList<
+  T extends EventTarget,
+  K = keyof T
+> = K extends `on${infer U}`
+? U : never;
+
+type B = EventList<WebSocket>
+
+export function once<T extends EventTarget, K extends EventList<T>>(target: T, name: K): Operation<EventTypeFromEventTarget<T, K>> {
   return action(function* (resolve) {
     target.addEventListener(name, resolve as EventListenerOrEventListenerObject);
     try {
@@ -29,7 +58,7 @@ export function once<T extends EventTarget, K extends EventTypes<T>>(target: T, 
   });
 }
 
-export function on<T extends EventTarget, K extends EventTypes<T>>(target: T, name: K): Stream<EventValue<T, K>, never> {
+export function on<T extends EventTarget, K extends EventList<T>>(target: T, name: K): Stream<EventTypeFromEventTarget<T, K>, never> {
   return resource(function* (provide) {
     let { input, output } = createChannel<Event, never>();
     let scope = yield* useScope();
@@ -38,17 +67,9 @@ export function on<T extends EventTarget, K extends EventTypes<T>>(target: T, na
     target.addEventListener(name, listener);
 
     try {
-      yield* provide(yield* output as Stream<EventValue<T, K>, never>);
+      yield* provide(yield* output as Stream<EventTypeFromEventTarget<T, K>, never>);
     } finally {
       target.removeEventListener(name, listener);
     }
   });
 }
-
-
-let socket = new WebSocket("wss://localhost:8000");
-
-socket.addEventListener("close", (event) => { event });
-
-let closes = once(socket, "close");  //=> Operation<CloseEvent>
-let messages = on(socket, "message"); //=> Stream<MessageEvent<any>, never>
