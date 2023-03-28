@@ -9,3 +9,4 @@ export * from "./callback.ts";
 export * from "./first.ts";
 export * from "./async.ts";
 export * from "./abort-signal.ts";
+export * from "./result.ts";

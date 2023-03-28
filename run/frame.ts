@@ -6,6 +6,7 @@ import { evaluate } from "../deps.ts";
 import { createEventStream } from "./event-stream.ts";
 import { createBlock } from "./block.ts";
 import { create } from "./create.ts";
+import { Err, Ok } from "../result.ts";
 
 export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
   let future = futurize(function* () {
@@ -14,7 +15,7 @@ export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
     if (teardown.type === "rejected") {
       return teardown;
     } else if (result.type === "aborted") {
-      return { type: "rejected", error: new Error("halted") };
+      return Err(new Error("halted"));
     } else {
       return result;
     }
@@ -64,40 +65,44 @@ export function createFrame(parent?: Frame): Frame {
     results.close(current);
   });
 
-  let frame: Frame = create<Frame>("Frame", {
-    id: ids++,
-    context,
-  }, {
-    createChild() {
-      let child = createFrame(frame);
-      children.add(child);
-      evaluate(function* () {
-        yield* child;
-        children.delete(child);
-      });
-      return child;
+  let frame: Frame = create<Frame>(
+    "Frame",
+    {
+      id: ids++,
+      context,
     },
-    run(operation) {
-      let block = createBlock(frame, operation);
-      running.add(block);
-      evaluate(function* () {
-        yield* block;
-        running.delete(block);
-      });
-      return block;
+    {
+      createChild() {
+        let child = createFrame(frame);
+        children.add(child);
+        evaluate(function* () {
+          yield* child;
+          children.delete(child);
+        });
+        return child;
+      },
+      run(operation) {
+        let block = createBlock(frame, operation);
+        running.add(block);
+        evaluate(function* () {
+          yield* block;
+          running.delete(block);
+        });
+        return block;
+      },
+      *crash(error: Error) {
+        teardown.close(Err(error));
+        return yield* frame;
+      },
+      *destroy() {
+        teardown.close(Ok(void 0));
+        return yield* frame;
+      },
+      *[Symbol.iterator]() {
+        return yield* results;
+      },
     },
-    *crash(error: Error) {
-      teardown.close({ type: "rejected", error });
-      return yield* frame;
-    },
-    *destroy() {
-      teardown.close({ type: "resolved", value: void 0 });
-      return yield* frame;
-    },
-    *[Symbol.iterator]() {
-      return yield* results;
-    },
-  });
+  );
 
   return frame;
 }

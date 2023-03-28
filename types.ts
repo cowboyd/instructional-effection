@@ -38,9 +38,19 @@ export interface Channel<T, TClose> {
 
 /* low-level interface Which you probably will not need */
 
-export type Result<T> =
-  | { type: "resolved"; value: T }
-  | { type: "rejected"; error: Error };
+export interface OkResult<T> {
+  type: "resolved";
+  ok: true;
+  value: T;
+}
+
+export interface ErrResult {
+  type: "rejected";
+  ok: false;
+  error: Error;
+}
+
+export type Result<T> = OkResult<T> | ErrResult;
 
 export interface Instruction {
   (frame: Frame, signal: AbortSignal): Computation<Result<unknown>>;
@@ -55,10 +65,13 @@ export interface Frame extends Computation<Result<void>> {
   destroy(): Computation<Result<void>>;
 }
 
-export type BlockResult<T> = Result<T> | {
-  type: "aborted";
-  result: Result<void>;
-};
+export type BlockResult<T> =
+  | Result<T>
+  | {
+    type: "aborted";
+    ok: false;
+    result: Result<void>;
+  };
 
 export interface Block<T = unknown> extends Computation<BlockResult<T>> {
   name: string;

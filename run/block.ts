@@ -11,13 +11,16 @@ import { createEventStream, forEach } from "./event-stream.ts";
 import { evaluate, reset, shift } from "../deps.ts";
 import { lazy } from "../lazy.ts";
 import { create } from "./create.ts";
+import { Err, Ok } from "../result.ts";
 
-type InstructionResult = {
-  type: "settled";
-  result: Result<unknown>;
-} | {
-  type: "interrupted";
-};
+type InstructionResult =
+  | {
+    type: "settled";
+    result: Result<unknown>;
+  }
+  | {
+    type: "interrupted";
+  };
 
 export function createBlock<T>(
   frame: Frame,
@@ -49,11 +52,11 @@ export function createBlock<T>(
         try {
           next = getNext(iterator());
         } catch (error) {
-          return thunks.close({ type: "rejected", error });
+          return thunks.close(Err(error));
         }
 
         if (next.done) {
-          return thunks.close({ type: "resolved", value: next.value });
+          return thunks.close(Ok(next.value));
         }
 
         let instruction = next.value;
@@ -70,7 +73,7 @@ export function createBlock<T>(
               result: yield* instruction(frame, signal),
             });
           } catch (error) {
-            k.tail({ type: "settled", result: { type: "rejected", error } });
+            k.tail({ type: "settled", result: Err(error) });
           }
         });
 
@@ -86,6 +89,7 @@ export function createBlock<T>(
       if (signal.aborted) {
         results.close({
           type: "aborted",
+          ok: false,
           result: result as Result<void>,
         });
       } else {
@@ -96,27 +100,31 @@ export function createBlock<T>(
     thunks.push($next(void 0));
   });
 
-  let block: Block<T> = create<Block<T>>("Block", {
-    name: operation.name,
-  }, {
-    enter,
-    *abort() {
-      return yield* shift<Result<void>>(function* (k) {
-        yield* reset(function* () {
-          let result = yield* block;
-          if (result.type === "aborted") {
-            k.tail(result.result);
-          } else {
-            k.tail(result as Result<void>);
-          }
+  let block: Block<T> = create<Block<T>>(
+    "Block",
+    {
+      name: operation.name,
+    },
+    {
+      enter,
+      *abort() {
+        return yield* shift<Result<void>>(function* (k) {
+          yield* reset(function* () {
+            let result = yield* block;
+            if (result.type === "aborted") {
+              k.tail(result.result);
+            } else {
+              k.tail(result as Result<void>);
+            }
+          });
+          controller.abort();
         });
-        controller.abort();
-      });
+      },
+      *[Symbol.iterator]() {
+        return yield* results;
+      },
     },
-    *[Symbol.iterator]() {
-      return yield* results;
-    },
-  });
+  );
   return block;
 }
 
