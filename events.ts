@@ -1,53 +1,27 @@
+// deno-lint-ignore-file no-explicit-any
 import type { Operation, Stream } from "./types.ts";
 import { action, resource, suspend } from "./instructions.ts";
 import { createChannel } from "./channel.ts";
 import { useScope } from "./run/scope.ts";
 
-
-type EventMap<T extends EventTarget> =
-  T extends WebSocket ? WebSocketEventMap
-  : T extends MediaQueryList
-  ? MediaQueryListEventMap
-  : T extends Document
-  ? DocumentEventMap
-  : T extends Window
-  ? WindowEventMap
-  : HTMLElementEventMap;
-
-type EventTypes<T extends EventTarget> = keyof EventMap<T> & string;
-type EventValue<T extends EventTarget, K extends EventTypes<T>> = Extract<EventMap<T>[K], Event>;
-
 type FN = (...any: any[]) => any;
 
-type EventTypeFromListener<T extends FN> = T extends (
-  this: any,
-  event: infer U
-) => any
-  ? U extends Event
-  ? U
-  : Event
+type EventTypeFromEventTarget<T, K extends string> = `on${K}` extends keyof T
+  ? Parameters<Extract<T[`on${K}`], FN>>[0]
   : Event;
 
-type EventTypeFromEventTarget<
-  T extends EventTarget,
-  K extends string
-> = T extends unknown
-  ? `on${K}` extends keyof T
-  ? EventTypeFromListener<
-    Extract<T[`on${K}`], FN>
-  >
-  : Event
+
+export type EventList<T> = T extends {
+  addEventListener(type: infer P, ...args: any): void;
+  // we basically ignore this but we need it so we always get the first override of addEventListener
+  addEventListener(type: infer P2, ...args: any): void;
+}
+  ? P & string
   : never;
 
-type EventList<
-  T extends EventTarget,
-  K = keyof T
-> = K extends `on${infer U}`
-? U : never;
 
-type B = EventList<WebSocket>
-
-export function once<T extends EventTarget, K extends EventList<T>>(target: T, name: K): Operation<EventTypeFromEventTarget<T, K>> {
+// deno-lint-ignore ban-types
+export function once<T extends EventTarget, K extends EventList<T> | (string & {})>(target: T, name: K): Operation<EventTypeFromEventTarget<T, K>> {
   return action(function* (resolve) {
     target.addEventListener(name, resolve as EventListenerOrEventListenerObject);
     try {
@@ -58,7 +32,8 @@ export function once<T extends EventTarget, K extends EventList<T>>(target: T, n
   });
 }
 
-export function on<T extends EventTarget, K extends EventList<T>>(target: T, name: K): Stream<EventTypeFromEventTarget<T, K>, never> {
+// deno-lint-ignore ban-types
+export function on<T extends EventTarget, K extends EventList<T> | (string & {})>(target: T, name: K): Stream<EventTypeFromEventTarget<T, K>, never> {
   return resource(function* (provide) {
     let { input, output } = createChannel<Event, never>();
     let scope = yield* useScope();
