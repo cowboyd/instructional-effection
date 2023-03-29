@@ -15,16 +15,16 @@ import { Err, Ok } from "../result.ts";
 
 type InstructionResult =
   | {
-      type: "settled";
-      result: Result<unknown>;
-    }
+    type: "settled";
+    result: Result<unknown>;
+  }
   | {
-      type: "interrupted";
-    };
+    type: "interrupted";
+  };
 
-export function createBlock<T>(
+export function createBlock<T extends void>(
   frame: Frame,
-  operation: () => Operation<T>
+  operation: () => Operation<T>,
 ): Block<T> {
   let results = createEventStream<void, BlockResult<T>>();
   let interrupt = createEventStream<void>();
@@ -78,10 +78,10 @@ export function createBlock<T>(
         });
 
         if (outcome.type === "settled") {
-          if (!outcome.result.ok) {
-            thunks.push($throw(outcome.result.error));
-          } else {
+          if (outcome.result.ok) {
             thunks.push($next(outcome.result.value));
+          } else {
+            thunks.push($throw(outcome.result.error));
           }
         }
       });
@@ -110,11 +110,7 @@ export function createBlock<T>(
         return yield* shift<Result<void>>(function* (k) {
           yield* reset(function* () {
             let result = yield* block;
-            if (result.aborted) {
-              k.tail(result.result);
-            } else {
-              k.tail(result as Result<void>);
-            }
+            k.tail(result.result);
           });
           controller.abort();
         });
@@ -122,7 +118,7 @@ export function createBlock<T>(
       *[Symbol.iterator]() {
         return yield* results;
       },
-    }
+    },
   );
   return block;
 }

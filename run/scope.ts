@@ -44,7 +44,7 @@ export function createScope(frame = createFrame()): Scope {
           {
             ...future,
             halt: () => futurize(() => block.abort()),
-          }
+          },
         );
 
         block.enter();
@@ -53,6 +53,6 @@ export function createScope(frame = createFrame()): Scope {
       },
       close: () => futurize(() => frame.destroy()),
       [Symbol.iterator]: () => futurize(() => frame)[Symbol.iterator](),
-    }
+    },
   );
 }

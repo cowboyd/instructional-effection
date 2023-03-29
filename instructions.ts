@@ -40,7 +40,7 @@ export function action<T>(
 
             let destruction = yield* child.destroy();
 
-            if (destruction.type === "rejected") {
+            if (!destruction.ok) {
               k.tail(destruction);
             } else {
               k.tail(result);
@@ -61,9 +61,9 @@ export function action<T>(
           });
 
           yield* reset(function* () {
-            let result = yield* block;
-            if (result.type === "rejected") {
-              settle(result);
+            let blockResult = yield* block;
+            if (!blockResult.result.ok) {
+              settle(blockResult.result);
             }
           });
 
@@ -85,17 +85,17 @@ export function spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
           let task = createFrameTask(child, block);
 
           yield* reset(function* () {
-            let result = yield* block;
+            let blockResult = yield* block;
             let destruction = yield* child.destroy();
-            if (destruction.type === "rejected") {
+            if (!destruction.ok) {
               yield* frame.crash(destruction.error);
             } else if (
-              result.type === "aborted" &&
-              result.result.type === "rejected"
+              blockResult.aborted &&
+              !blockResult.result.ok
             ) {
-              yield* frame.crash(result.result.error);
-            } else if (result.type === "rejected") {
-              yield* frame.crash(result.error);
+              yield* frame.crash(blockResult.result.error);
+            } else if (!blockResult.result.ok) {
+              yield* frame.crash(blockResult.result.error);
             }
           });
 
@@ -128,7 +128,7 @@ export function resource<T>(
           };
           yield* reset(function* () {
             let result = yield* child;
-            if (result.type === "rejected") {
+            if (!result.ok) {
               yield* frame.crash(result.error);
             }
           });
@@ -136,9 +136,9 @@ export function resource<T>(
 
           yield* reset(function* () {
             let done = yield* block;
-            if (done.type === "rejected") {
-              k.tail(done);
-            } else if (done.type === "resolved") {
+            if (!done.result.ok) {
+              k.tail(done.result);
+            } else if (done.result.ok) {
               let err = new Error(
                 `resource exited without ever providing anything`,
               );

@@ -101,7 +101,7 @@ export function createFrame(parent?: Frame): Frame {
       *[Symbol.iterator]() {
         return yield* results;
       },
-    }
+    },
   );
 
   return frame;

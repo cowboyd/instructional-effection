@@ -18,7 +18,7 @@ export function futurize<T>(
   let { future, resolve, reject } = createFuture<T>();
   evaluate(function* () {
     let result = yield* computation();
-    if (result.type === "resolved") {
+    if (result.ok) {
       resolve(result.value);
     } else {
       reject(result.error);
@@ -45,7 +45,7 @@ export function createFuture<T>(): NewFuture<T> {
       while (watchers.size > 0) {
         for (let watcher of watchers) {
           watchers.delete(watcher);
-          if (result.type === "resolved") {
+          if (result.ok) {
             watcher.resolve(result.value);
           } else {
             watcher.reject(result.error);
