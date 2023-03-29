@@ -22,7 +22,7 @@ type InstructionResult =
     type: "interrupted";
   };
 
-export function createBlock<T extends void>(
+export function createBlock<T>(
   frame: Frame,
   operation: () => Operation<T>,
 ): Block<T> {
@@ -109,8 +109,8 @@ export function createBlock<T extends void>(
       *abort() {
         return yield* shift<Result<void>>(function* (k) {
           yield* reset(function* () {
-            let result = yield* block;
-            k.tail(result.result);
+            let blockResult = yield* block;
+            k.tail(blockResult.result as Result<void>);
           });
           controller.abort();
         });
