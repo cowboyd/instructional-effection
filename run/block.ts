@@ -15,16 +15,16 @@ import { Err, Ok } from "../result.ts";
 
 type InstructionResult =
   | {
-    type: "settled";
-    result: Result<unknown>;
-  }
+      type: "settled";
+      result: Result<unknown>;
+    }
   | {
-    type: "interrupted";
-  };
+      type: "interrupted";
+    };
 
 export function createBlock<T>(
   frame: Frame,
-  operation: () => Operation<T>,
+  operation: () => Operation<T>
 ): Block<T> {
   let results = createEventStream<void, BlockResult<T>>();
   let interrupt = createEventStream<void>();
@@ -78,7 +78,7 @@ export function createBlock<T>(
         });
 
         if (outcome.type === "settled") {
-          if (outcome.result.type === "rejected") {
+          if (!outcome.result.ok) {
             thunks.push($throw(outcome.result.error));
           } else {
             thunks.push($next(outcome.result.value));
@@ -88,12 +88,11 @@ export function createBlock<T>(
 
       if (signal.aborted) {
         results.close({
-          type: "aborted",
-          ok: false,
-          result: result as Result<void>,
+          aborted: true,
+          result: result as Result<T>,
         });
       } else {
-        results.close(result);
+        results.close({ aborted: false, result });
       }
     });
 
@@ -111,7 +110,7 @@ export function createBlock<T>(
         return yield* shift<Result<void>>(function* (k) {
           yield* reset(function* () {
             let result = yield* block;
-            if (result.type === "aborted") {
+            if (result.aborted) {
               k.tail(result.result);
             } else {
               k.tail(result as Result<void>);
@@ -123,7 +122,7 @@ export function createBlock<T>(
       *[Symbol.iterator]() {
         return yield* results;
       },
-    },
+    }
   );
   return block;
 }

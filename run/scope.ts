@@ -18,22 +18,25 @@ export function createScope(frame = createFrame()): Scope {
       run(operation) {
         let block = frame.run(operation);
         let future = futurize(function* () {
-          let result = yield* block;
-          if (result.type === "rejected") {
-            let teardown = yield* frame.crash(result.error);
-            if (teardown.type === "rejected") {
-              return teardown;
-            } else {
-              return result;
-            }
-          } else if (result.type === "aborted") {
-            if (result.result.type === "rejected") {
-              return result.result;
-            } else {
+          let blockResult = yield* block;
+          if (blockResult.aborted) {
+            if (blockResult.result.ok) {
               return Err(new Error("halted"));
+            } else {
+              return blockResult.result;
             }
           }
-          return result;
+
+          if (blockResult.result.ok) {
+            return blockResult.result;
+          } else {
+            let teardown = yield* frame.crash(blockResult.result.error);
+            if (teardown.ok) {
+              return blockResult.result;
+            }
+
+            return teardown;
+          }
         });
         let task = create(
           "Task",
@@ -41,7 +44,7 @@ export function createScope(frame = createFrame()): Scope {
           {
             ...future,
             halt: () => futurize(() => block.abort()),
-          },
+          }
         );
 
         block.enter();
@@ -50,6 +53,6 @@ export function createScope(frame = createFrame()): Scope {
       },
       close: () => futurize(() => frame.destroy()),
       [Symbol.iterator]: () => futurize(() => frame)[Symbol.iterator](),
-    },
+    }
   );
 }

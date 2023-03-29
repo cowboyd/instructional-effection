@@ -39,14 +39,12 @@ export interface Channel<T, TClose> {
 /* low-level interface Which you probably will not need */
 
 export interface OkResult<T> {
-  type: "resolved";
-  ok: true;
+  readonly ok: true;
   value: T;
 }
 
 export interface ErrResult {
-  type: "rejected";
-  ok: false;
+  readonly ok: false;
   error: Error;
 }
 
@@ -66,11 +64,13 @@ export interface Frame extends Computation<Result<void>> {
 }
 
 export type BlockResult<T> =
-  | Result<T>
   | {
-    type: "aborted";
-    ok: false;
-    result: Result<void>;
+    readonly aborted: false;
+    result: Result<T>;
+  }
+  | {
+    readonly aborted: true;
+    result: Result<T>;
   };
 
 export interface Block<T = unknown> extends Computation<BlockResult<T>> {

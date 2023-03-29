@@ -10,14 +10,14 @@ import { Err, Ok } from "../result.ts";
 
 export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
   let future = futurize(function* () {
-    let result = yield* block;
+    let blockResult = yield* block;
     let teardown = yield* frame.destroy();
-    if (teardown.type === "rejected") {
+    if (!teardown.ok) {
       return teardown;
-    } else if (result.type === "aborted") {
+    } else if (blockResult.aborted) {
       return Err(new Error("halted"));
     } else {
-      return result;
+      return blockResult.result;
     }
   });
   return {
@@ -26,7 +26,7 @@ export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
       futurize(function* () {
         let killblock = yield* block.abort();
         let killframe = yield* frame.destroy();
-        if (killframe.type === "rejected") {
+        if (!killframe.ok) {
           return killframe;
         } else {
           return killblock;
@@ -48,7 +48,7 @@ export function createFrame(parent?: Frame): Frame {
     let current = yield* teardown;
     for (let block of running) {
       let teardown = yield* block.abort();
-      if (teardown.type !== "resolved") {
+      if (!teardown.ok) {
         current = teardown;
       }
     }
@@ -56,7 +56,7 @@ export function createFrame(parent?: Frame): Frame {
     while (children.size !== 0) {
       for (let child of [...children].reverse()) {
         let teardown = yield* child.destroy();
-        if (teardown.type !== "resolved") {
+        if (!teardown.ok) {
           current = teardown;
         }
       }
@@ -101,7 +101,7 @@ export function createFrame(parent?: Frame): Frame {
       *[Symbol.iterator]() {
         return yield* results;
       },
-    },
+    }
   );
 
   return frame;

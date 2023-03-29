@@ -1,16 +1,14 @@
-import type { ErrResult, OkResult } from "./types.ts";
+import type { Result } from "./types.ts";
 
-export function Ok<T>(value: T): OkResult<T> {
+export function Ok<T>(value: T): Result<T> {
   return {
-    type: "resolved",
     ok: true,
     value,
   };
 }
 
-export function Err(error: Error): ErrResult {
+export function Err(error: Error): Result<never> {
   return {
-    type: "rejected",
     ok: false,
     error,
   };
