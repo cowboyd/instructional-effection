@@ -15,9 +15,9 @@ export function createScope(frame = createFrame()): Scope {
     "Scope",
     {},
     {
-      run(operation) {
+      run<T>(operation: () => Operation<T>) {
         let block = frame.run(operation);
-        let future = futurize(function* () {
+        let future = futurize<T>(function* () {
           let blockResult = yield* block;
           if (blockResult.aborted) {
             if (blockResult.result.ok) {
@@ -38,6 +38,7 @@ export function createScope(frame = createFrame()): Scope {
             return teardown;
           }
         });
+
         let task = create(
           "Task",
           {},
