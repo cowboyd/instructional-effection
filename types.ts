@@ -38,17 +38,13 @@ export interface Channel<T, TClose> {
 
 /* low-level interface Which you probably will not need */
 
-export interface OkResult<T> {
+export type Result<T> = {
   readonly ok: true;
   value: T;
-}
-
-export interface ErrResult {
+} | {
   readonly ok: false;
   error: Error;
-}
-
-export type Result<T> = OkResult<T> | ErrResult;
+};
 
 export interface Instruction {
   (frame: Frame, signal: AbortSignal): Computation<Result<unknown>>;

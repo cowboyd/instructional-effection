@@ -1,15 +1,4 @@
 import type { Result } from "./types.ts";
 
-export function Ok<T>(value: T): Result<T> {
-  return {
-    ok: true,
-    value,
-  };
-}
-
-export function Err(error: Error): Result<never> {
-  return {
-    ok: false,
-    error,
-  };
-}
+export const Ok = <T>(value: T): Result<T> => ({ ok: true, value });
+export const Err = <T>(error: Error): Result<T> => ({ ok: false, error });
