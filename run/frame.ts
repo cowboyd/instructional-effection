@@ -9,7 +9,7 @@ import { create } from "./create.ts";
 import { Err, Ok } from "../result.ts";
 
 export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
-  let future = futurize(function* () {
+  let future = futurize<T>(function* () {
     let blockResult = yield* block;
     let teardown = yield* frame.destroy();
     if (!teardown.ok) {
@@ -20,6 +20,7 @@ export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
       return blockResult.result;
     }
   });
+
   return {
     ...future,
     halt: () =>
