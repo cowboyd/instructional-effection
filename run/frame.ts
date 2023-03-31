@@ -66,44 +66,37 @@ export function createFrame(parent?: Frame): Frame {
     results.close(current);
   });
 
-  let frame: Frame = create<Frame>(
-    "Frame",
-    {
-      id: ids++,
-      context,
+  let frame: Frame = create<Frame>("Frame", { id: ids++, context }, {
+    createChild() {
+      let child = createFrame(frame);
+      children.add(child);
+      evaluate(function* () {
+        yield* child;
+        children.delete(child);
+      });
+      return child;
     },
-    {
-      createChild() {
-        let child = createFrame(frame);
-        children.add(child);
-        evaluate(function* () {
-          yield* child;
-          children.delete(child);
-        });
-        return child;
-      },
-      run(operation) {
-        let block = createBlock(frame, operation);
-        running.add(block);
-        evaluate(function* () {
-          yield* block;
-          running.delete(block);
-        });
-        return block;
-      },
-      *crash(error: Error) {
-        teardown.close(Err(error));
-        return yield* frame;
-      },
-      *destroy() {
-        teardown.close(Ok(void 0));
-        return yield* frame;
-      },
-      *[Symbol.iterator]() {
-        return yield* results;
-      },
+    run(operation) {
+      let block = createBlock(frame, operation);
+      running.add(block);
+      evaluate(function* () {
+        yield* block;
+        running.delete(block);
+      });
+      return block;
     },
-  );
+    *crash(error: Error) {
+      teardown.close(Err(error));
+      return yield* frame;
+    },
+    *destroy() {
+      teardown.close(Ok(void 0));
+      return yield* frame;
+    },
+    *[Symbol.iterator]() {
+      return yield* results;
+    },
+  });
 
   return frame;
 }

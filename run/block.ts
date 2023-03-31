@@ -99,27 +99,21 @@ export function createBlock<T>(
     thunks.push($next(void 0));
   });
 
-  let block: Block<T> = create<Block<T>>(
-    "Block",
-    {
-      name: operation.name,
-    },
-    {
-      enter,
-      *abort() {
-        return yield* shift<Result<void>>(function* (k) {
-          yield* reset(function* () {
-            let blockResult = yield* block;
-            k.tail(blockResult.result as Result<void>);
-          });
-          controller.abort();
+  let block: Block<T> = create<Block<T>>("Block", { name: operation.name }, {
+    enter,
+    *abort() {
+      return yield* shift<Result<void>>(function* (k) {
+        yield* reset(function* () {
+          let blockResult = yield* block;
+          k.tail(blockResult.result as Result<void>);
         });
-      },
-      *[Symbol.iterator]() {
-        return yield* results;
-      },
+        controller.abort();
+      });
     },
-  );
+    *[Symbol.iterator]() {
+      return yield* results;
+    },
+  });
   return block;
 }
 
