@@ -4,6 +4,7 @@ import type { Computation } from "./deps.ts";
 import { evaluate } from "./deps.ts";
 import { action, suspend } from "./instructions.ts";
 import { lazy } from "./lazy.ts";
+import { Err, Ok } from "./result.ts";
 
 export interface NewFuture<T> {
   resolve(value: T): void;
@@ -17,7 +18,7 @@ export function futurize<T>(
   let { future, resolve, reject } = createFuture<T>();
   evaluate(function* () {
     let result = yield* computation();
-    if (result.type === "resolved") {
+    if (result.ok) {
       resolve(result.value);
     } else {
       reject(result.error);
@@ -31,11 +32,12 @@ export function createFuture<T>(): NewFuture<T> {
 
   let watchers = new Set<Watcher<T>>();
 
-  let promise = lazy(() =>
-    new Promise<T>((resolve, reject) => {
-      watchers.add({ resolve, reject });
-      notify();
-    })
+  let promise = lazy(
+    () =>
+      new Promise<T>((resolve, reject) => {
+        watchers.add({ resolve, reject });
+        notify();
+      }),
   );
 
   function notify() {
@@ -43,7 +45,7 @@ export function createFuture<T>(): NewFuture<T> {
       while (watchers.size > 0) {
         for (let watcher of watchers) {
           watchers.delete(watcher);
-          if (result.type === "resolved") {
+          if (result.ok) {
             watcher.resolve(result.value);
           } else {
             watcher.reject(result.error);
@@ -55,12 +57,12 @@ export function createFuture<T>(): NewFuture<T> {
 
   let settle: Watcher<T> = {
     resolve(value) {
-      result = { type: "resolved", value };
+      result = Ok(value);
       settle.resolve = settle.reject = () => {};
       notify();
     },
     reject(error) {
-      result = { type: "rejected", error };
+      result = Err(error);
       settle.resolve = settle.reject = () => {};
       notify();
     },
@@ -70,7 +72,7 @@ export function createFuture<T>(): NewFuture<T> {
     [Symbol.toStringTag]: "Future",
     *[Symbol.iterator]() {
       if (result) {
-        if (result.type === "resolved") {
+        if (result.ok) {
           return result.value;
         } else {
           throw result.error;

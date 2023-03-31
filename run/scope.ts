@@ -3,6 +3,7 @@ import { createFrame } from "./frame.ts";
 import { create } from "./create.ts";
 import { futurize } from "../future.ts";
 import { getframe } from "../instructions.ts";
+import { Err } from "../result.ts";
 
 export function* useScope(): Operation<Scope> {
   let frame = yield* getframe();
@@ -11,26 +12,30 @@ export function* useScope(): Operation<Scope> {
 
 export function createScope(frame = createFrame()): Scope {
   return create<Scope>("Scope", {}, {
-    run(operation) {
+    run<T>(operation: () => Operation<T>) {
       let block = frame.run(operation);
-      let future = futurize(function* () {
-        let result = yield* block;
-        if (result.type === "rejected") {
-          let teardown = yield* frame.crash(result.error);
-          if (teardown.type === "rejected") {
-            return teardown;
+      let future = futurize<T>(function* () {
+        let blockResult = yield* block;
+        if (blockResult.aborted) {
+          if (blockResult.result.ok) {
+            return Err(new Error("halted"));
           } else {
-            return result;
-          }
-        } else if (result.type === "aborted") {
-          if (result.result.type === "rejected") {
-            return result.result;
-          } else {
-            return { type: "rejected", error: new Error("halted") };
+            return blockResult.result;
           }
         }
-        return result;
+
+        if (blockResult.result.ok) {
+          return blockResult.result;
+        } else {
+          let teardown = yield* frame.crash(blockResult.result.error);
+          if (teardown.ok) {
+            return blockResult.result;
+          } else {
+            return teardown;
+          }
+        }
       });
+
       let task = create("Task", {}, {
         ...future,
         halt: () => futurize(() => block.abort()),

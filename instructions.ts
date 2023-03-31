@@ -10,6 +10,7 @@ import type {
 
 import { reset, shift } from "./deps.ts";
 import { createFrameTask } from "./run/frame.ts";
+import { Err, Ok } from "./result.ts";
 
 export function suspend(): Operation<void> {
   return {
@@ -17,7 +18,7 @@ export function suspend(): Operation<void> {
       return yield function Suspend(_, signal) {
         return shift<Result<void>>(function* (k) {
           if (signal.aborted) {
-            k.tail({ type: "resolved", value: void 0 });
+            k.tail(Ok(void 0));
           }
         });
       };
@@ -39,31 +40,30 @@ export function action<T>(
 
             let destruction = yield* child.destroy();
 
-            if (destruction.type === "rejected") {
+            if (!destruction.ok) {
               k.tail(destruction);
             } else {
               k.tail(result);
             }
           });
 
-          let resolve: Resolve<T> = (value) =>
-            settle({ type: "resolved", value });
-          let reject: Reject = (error) => settle({ type: "rejected", error });
+          let resolve: Resolve<T> = (value) => settle(Ok(value));
+          let reject: Reject = (error) => settle(Err(error));
 
           let child = frame.createChild();
           let block = child.run(() => operation(resolve, reject));
 
           yield* reset(function* () {
             let result = yield* child;
-            if (result.type === "rejected") {
+            if (!result.ok) {
               k.tail(result);
             }
           });
 
           yield* reset(function* () {
-            let result = yield* block;
-            if (result.type === "rejected") {
-              settle(result);
+            let blockResult = yield* block;
+            if (!blockResult.result.ok) {
+              settle(blockResult.result);
             }
           });
 
@@ -85,22 +85,23 @@ export function spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
           let task = createFrameTask(child, block);
 
           yield* reset(function* () {
-            let result = yield* block;
+            let blockResult = yield* block;
             let destruction = yield* child.destroy();
-            if (destruction.type === "rejected") {
+            if (!destruction.ok) {
               yield* frame.crash(destruction.error);
             } else if (
-              result.type === "aborted" && result.result.type === "rejected"
+              blockResult.aborted &&
+              !blockResult.result.ok
             ) {
-              yield* frame.crash(result.result.error);
-            } else if (result.type === "rejected") {
-              yield* frame.crash(result.error);
+              yield* frame.crash(blockResult.result.error);
+            } else if (!blockResult.result.ok) {
+              yield* frame.crash(blockResult.result.error);
             }
           });
 
           block.enter();
 
-          k.tail({ type: "resolved", value: task });
+          k.tail(Ok(task));
         });
       };
     },
@@ -120,14 +121,14 @@ export function resource<T>(
               *[Symbol.iterator]() {
                 return yield () =>
                   shift<Result<void>>(function* () {
-                    k.tail({ type: "resolved", value });
+                    k.tail(Ok(value));
                   });
               },
             };
           };
           yield* reset(function* () {
             let result = yield* child;
-            if (result.type === "rejected") {
+            if (!result.ok) {
               yield* frame.crash(result.error);
             }
           });
@@ -135,15 +136,13 @@ export function resource<T>(
 
           yield* reset(function* () {
             let done = yield* block;
-            if (done.type === "rejected") {
-              k.tail(done);
-            } else if (done.type === "resolved") {
-              k.tail({
-                type: "rejected",
-                error: new Error(
-                  `resource exited without ever providing anything`,
-                ),
-              });
+            if (!done.result.ok) {
+              k.tail(done.result);
+            } else if (done.result.ok) {
+              let err = new Error(
+                `resource exited without ever providing anything`,
+              );
+              k.tail(Err(err));
             }
           });
 
@@ -159,7 +158,7 @@ export function getframe(): Operation<Frame> {
     *[Symbol.iterator]() {
       return yield (frame) =>
         shift<Result<Frame>>(function* (k) {
-          k.tail({ type: "resolved", value: frame });
+          k.tail(Ok(frame));
         });
     },
   };

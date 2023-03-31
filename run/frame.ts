@@ -6,26 +6,28 @@ import { evaluate } from "../deps.ts";
 import { createEventStream } from "./event-stream.ts";
 import { createBlock } from "./block.ts";
 import { create } from "./create.ts";
+import { Err, Ok } from "../result.ts";
 
 export function createFrameTask<T>(frame: Frame, block: Block<T>): Task<T> {
-  let future = futurize(function* () {
-    let result = yield* block;
+  let future = futurize<T>(function* () {
+    let blockResult = yield* block;
     let teardown = yield* frame.destroy();
-    if (teardown.type === "rejected") {
+    if (!teardown.ok) {
       return teardown;
-    } else if (result.type === "aborted") {
-      return { type: "rejected", error: new Error("halted") };
+    } else if (blockResult.aborted) {
+      return Err(new Error("halted"));
     } else {
-      return result;
+      return blockResult.result;
     }
   });
+
   return {
     ...future,
     halt: () =>
       futurize(function* () {
         let killblock = yield* block.abort();
         let killframe = yield* frame.destroy();
-        if (killframe.type === "rejected") {
+        if (!killframe.ok) {
           return killframe;
         } else {
           return killblock;
@@ -47,7 +49,7 @@ export function createFrame(parent?: Frame): Frame {
     let current = yield* teardown;
     for (let block of running) {
       let teardown = yield* block.abort();
-      if (teardown.type !== "resolved") {
+      if (!teardown.ok) {
         current = teardown;
       }
     }
@@ -55,7 +57,7 @@ export function createFrame(parent?: Frame): Frame {
     while (children.size !== 0) {
       for (let child of [...children].reverse()) {
         let teardown = yield* child.destroy();
-        if (teardown.type !== "resolved") {
+        if (!teardown.ok) {
           current = teardown;
         }
       }
@@ -64,10 +66,7 @@ export function createFrame(parent?: Frame): Frame {
     results.close(current);
   });
 
-  let frame: Frame = create<Frame>("Frame", {
-    id: ids++,
-    context,
-  }, {
+  let frame: Frame = create<Frame>("Frame", { id: ids++, context }, {
     createChild() {
       let child = createFrame(frame);
       children.add(child);
@@ -87,11 +86,11 @@ export function createFrame(parent?: Frame): Frame {
       return block;
     },
     *crash(error: Error) {
-      teardown.close({ type: "rejected", error });
+      teardown.close(Err(error));
       return yield* frame;
     },
     *destroy() {
-      teardown.close({ type: "resolved", value: void 0 });
+      teardown.close(Ok(void 0));
       return yield* frame;
     },
     *[Symbol.iterator]() {
